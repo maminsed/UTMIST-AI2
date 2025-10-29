@@ -14,8 +14,8 @@ match_time = 99999
 
 # Run a single real-time match
 run_real_time_match(
-    agent_1=my_agent,
-    agent_2=opponent,
+    agent_1=opponent,  # Your AI
+    agent_2=my_agent,  # You
     max_timesteps=30 * 999990000,  # Match time in frames (adjust as needed)
     resolution=CameraResolution.LOW,
 )
