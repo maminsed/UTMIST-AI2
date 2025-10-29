@@ -37,6 +37,8 @@ class SubmittedAgent(Agent):
     ):
         super().__init__(*args, **kwargs)
         self.time = 0
+        self.prev_pos = None
+        self.down = False
 
     def predict(self, obs):
         self.time += 1
@@ -45,24 +47,25 @@ class SubmittedAgent(Agent):
         opp_KO = self.obs_helper.get_section(obs, 'opponent_state') in [5, 11]
         action = self.act_helper.zeros()
 
-        # If off the edge, come back
-        if pos[0] > 10.67/2:
-            action = self.act_helper.press_keys(['a'])
-        elif pos[0] < -10.67/2:
-            action = self.act_helper.press_keys(['d'])
-        elif not opp_KO:
-            # Head toward opponent
-            if (opp_pos[0] > pos[0]):
-                action = self.act_helper.press_keys(['d'])
-            else:
-                action = self.act_helper.press_keys(['a'])
+        if self.prev_pos is not None:
+            self.down = (pos[1] - self.prev_pos[1]) > 0.00
+        else:
+            self.prev_pos = pos
 
-        # Note: Passing in partial action
-        # Jump if below map or opponent is above you
-        if (pos[1] > 1.6 or pos[1] > opp_pos[1]) and self.time % 2 == 0:
+        if pos[0] < -6.9:
+            action = self.act_helper.press_keys(['d'], action)
+        elif pos[0] > -1.9 and pos[0] < 0:
+            action = self.act_helper.press_keys(['a'], action)
+        elif pos[0] > 0 and pos[0] < 1.9:
+            action = self.act_helper.press_keys(['d'], action)
+        elif pos[0] > 6.9:
+            action = self.act_helper.press_keys(['a'], action)
+
+        # Jump if falling
+        if (self.down and self.time % 11 == 0) or pos[1] > 5:
             action = self.act_helper.press_keys(['space'], action)
 
         # Attack if near
         if (pos[0] - opp_pos[0])**2 + (pos[1] - opp_pos[1])**2 < 4.0:
-            action = self.act_helper.press_keys(['j'], action)
+            action = self.act_helper.press_keys(['k'], action)
         return action
