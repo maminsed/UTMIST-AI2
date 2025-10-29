@@ -31,70 +31,41 @@ class SubmittedAgent(Agent):
     Input the **file_path** to your agent here for submission!
     '''
     def __init__(
-        self,
-        file_path: Optional[str] = None,
+            self,
+            *args,
+            **kwargs
     ):
-        super().__init__(file_path)
-
-        # To run a TTNN model, you must maintain a pointer to the device and can be done by 
-        # uncommmenting the line below to use the device pointer
-        # self.mesh_device = ttnn.open_mesh_device(ttnn.MeshShape(1,1))
-
-    def _initialize(self) -> None:
-        if self.file_path is None:
-            # For training: create new model
-            self.model = PPO("MlpPolicy", self.env, verbose=0)
-            del self.env
-        else:
-            # For inference: load trained model
-            self.model = PPO.load(self.file_path)
-
-        # To run the sample TTNN model during inference, you can uncomment the 5 lines below:
-        # This assumes that your self.model.policy has the MLPPolicy architecture defined in `train_agent.py` or `my_agent_tt.py`
-        # mlp_state_dict = self.model.policy.features_extractor.model.state_dict()
-        # self.tt_model = TTMLPPolicy(mlp_state_dict, self.mesh_device)
-        # self.model.policy.features_extractor.model = self.tt_model
-        # self.model.policy.vf_features_extractor.model = self.tt_model
-        # self.model.policy.pi_features_extractor.model = self.tt_model
-
-    def _gdown(self) -> str:
-        # Option 1: Use a local checkpoint after training
-        # Try latest checkpoint first - check ultra-aggressive experiment first
-        experiment_dir = "checkpoints/experiment_ultra_aggressive"
-        if not os.path.isdir(experiment_dir):
-            experiment_dir = "checkpoints/experiment_aggressive"
-        if not os.path.isdir(experiment_dir):
-            # Fallback to original experiment
-            experiment_dir = "checkpoints/experiment_10"
-        if os.path.isdir(experiment_dir):
-            # Find the latest checkpoint
-            files = [f for f in os.listdir(experiment_dir) if f.endswith('.zip')]
-            if files:
-                # Get the checkpoint with the highest step count
-                # Filename format: rl_model_2150042_steps.zip
-                files.sort(key=lambda x: int(x.split('_')[-2]))
-                latest_checkpoint = os.path.join(experiment_dir, files[-1])
-                if os.path.isfile(latest_checkpoint):
-                    print(f"Loading local checkpoint: {latest_checkpoint}")
-                    return latest_checkpoint
-        
-        # Option 2: Download from Google Drive
-        data_path = "rl-model.zip"
-        if not os.path.isfile(data_path):
-            print(f"Downloading {data_path}...")
-            # Place a link to your PUBLIC model data here. This is where we will download it from on the tournament server.
-            url = "https://drive.google.com/file/d/1JIokiBOrOClh8piclbMlpEEs6mj3H1HJ/view?usp=sharing"
-            gdown.download(url, output=data_path, fuzzy=True)
-        return data_path
+        super().__init__(*args, **kwargs)
+        self.time = 0
+        self.prev_pos = None
+        self.down = False
 
     def predict(self, obs):
-        action, _ = self.model.predict(obs)
+        self.time += 1
+        pos = self.obs_helper.get_section(obs, 'player_pos')
+        opp_pos = self.obs_helper.get_section(obs, 'opponent_pos')
+        opp_KO = self.obs_helper.get_section(obs, 'opponent_state') in [5, 11]
+        action = self.act_helper.zeros()
+
+        if self.prev_pos is not None:
+            self.down = (pos[1] - self.prev_pos[1]) > 0.00
+        else:
+            self.prev_pos = pos
+
+        if pos[0] < -6.9:
+            action = self.act_helper.press_keys(['d'], action)
+        elif pos[0] > -1.9 and pos[0] < 0:
+            action = self.act_helper.press_keys(['a'], action)
+        elif pos[0] > 0 and pos[0] < 1.9:
+            action = self.act_helper.press_keys(['d'], action)
+        elif pos[0] > 6.9:
+            action = self.act_helper.press_keys(['a'], action)
+
+        # Jump if falling
+        if (self.down and self.time % 11 == 0) or pos[1] > 5:
+            action = self.act_helper.press_keys(['space'], action)
+
+        # Attack if near
+        if (pos[0] - opp_pos[0])**2 + (pos[1] - opp_pos[1])**2 < 4.0:
+            action = self.act_helper.press_keys(['k'], action)
         return action
-
-    def save(self, file_path: str) -> None:
-        self.model.save(file_path)
-
-    # If modifying the number of models (or training in general), modify this
-    def learn(self, env, total_timesteps, log_interval: int = 4):
-        self.model.set_env(env)
-        self.model.learn(total_timesteps=total_timesteps, log_interval=log_interval)
