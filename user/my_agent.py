@@ -67,5 +67,5 @@ class SubmittedAgent(Agent):
 
         # Attack if near
         if (pos[0] - opp_pos[0])**2 + (pos[1] - opp_pos[1])**2 < 4.0:
-            action = self.act_helper.press_keys(['k'], action)
+            action = self.act_helper.press_keys(['j'], action)
         return action
