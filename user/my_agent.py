@@ -59,14 +59,20 @@ class SubmittedAgent(Agent):
 
     def _gdown(self) -> str:
         # Option 1: Use a local checkpoint after training
-        # Try latest checkpoint first
-        experiment_dir = "checkpoints/experiment_10"
+        # Try latest checkpoint first - check ultra-aggressive experiment first
+        experiment_dir = "checkpoints/experiment_ultra_aggressive"
+        if not os.path.isdir(experiment_dir):
+            experiment_dir = "checkpoints/experiment_aggressive"
+        if not os.path.isdir(experiment_dir):
+            # Fallback to original experiment
+            experiment_dir = "checkpoints/experiment_10"
         if os.path.isdir(experiment_dir):
             # Find the latest checkpoint
             files = [f for f in os.listdir(experiment_dir) if f.endswith('.zip')]
             if files:
                 # Get the checkpoint with the highest step count
-                files.sort(key=lambda x: int(x.split('_')[-1].split('.')[0]))
+                # Filename format: rl_model_2150042_steps.zip
+                files.sort(key=lambda x: int(x.split('_')[-2]))
                 latest_checkpoint = os.path.join(experiment_dir, files[-1])
                 if os.path.isfile(latest_checkpoint):
                     print(f"Loading local checkpoint: {latest_checkpoint}")

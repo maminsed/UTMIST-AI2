@@ -1037,6 +1037,12 @@ def train(agent: Agent,
 
     if train_logging == TrainLogging.PLOT:
         plot_results(log_dir)
+        # Also generate detailed analysis
+        try:
+            from user.plot_learning_curve import plot_learning_curve
+            plot_learning_curve(log_dir)
+        except Exception as e:
+            print(f"Note: Could not generate detailed analysis: {e}")
 
 ## Run Human vs AI match function
 import pygame
