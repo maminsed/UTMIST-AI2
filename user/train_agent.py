@@ -543,21 +543,20 @@ Add your dictionary of RewardFunctions here using RewTerms
 '''
 def gen_reward_manager():
     reward_functions = {
-        #'target_height_reward': RewTerm(func=base_height_l2, weight=0.0, params={'target_height': -4, 'obj_name': 'player'}),
-        'danger_zone_reward': RewTerm(func=danger_zone_reward, weight=0.5),
-        'damage_interaction_reward': RewTerm(func=damage_interaction_reward, weight=1.0),
-        #'head_to_middle_reward': RewTerm(func=head_to_middle_reward, weight=0.01),
-        #'head_to_opponent': RewTerm(func=head_to_opponent, weight=0.05),
-        'penalize_attack_reward': RewTerm(func=in_state_reward, weight=-0.04, params={'desired_state': AttackState}),
-        'holding_more_than_3_keys': RewTerm(func=holding_more_than_3_keys, weight=-0.01),
-        #'taunt_reward': RewTerm(func=in_state_reward, weight=0.2, params={'desired_state': TauntState}),
+        # Core combat rewards
+        'damage_interaction_reward': RewTerm(func=damage_interaction_reward, weight=2.0),  # Increased from 1.0 to encourage engagement
+        'danger_zone_reward': RewTerm(func=danger_zone_reward, weight=0.2),  # Reduced from 0.5 to allow aerial play
+        'penalize_attack_reward': RewTerm(func=in_state_reward, weight=-0.02, params={'desired_state': AttackState}),  # Reduced to allow attacking
+        'holding_more_than_3_keys': RewTerm(func=holding_more_than_3_keys, weight=-0.005),  # Very minor input penalty
+        # Optional: add position rewards
+        #'head_to_opponent': RewTerm(func=head_to_opponent, weight=0.02),
     }
     signal_subscriptions = {
-        'on_win_reward': ('win_signal', RewTerm(func=on_win_reward, weight=50)),
-        'on_knockout_reward': ('knockout_signal', RewTerm(func=on_knockout_reward, weight=8)),
-        'on_combo_reward': ('hit_during_stun', RewTerm(func=on_combo_reward, weight=5)),
-        'on_equip_reward': ('weapon_equip_signal', RewTerm(func=on_equip_reward, weight=10)),
-        'on_drop_reward': ('weapon_drop_signal', RewTerm(func=on_drop_reward, weight=15))
+        'on_win_reward': ('win_signal', RewTerm(func=on_win_reward, weight=20)),  # Reduced from 50 to prevent over-defensive play
+        'on_knockout_reward': ('knockout_signal', RewTerm(func=on_knockout_reward, weight=10)),  # Increased from 8
+        'on_combo_reward': ('hit_during_stun', RewTerm(func=on_combo_reward, weight=8)),  # Increased from 5 to encourage combos
+        'on_equip_reward': ('weapon_equip_signal', RewTerm(func=on_equip_reward, weight=5)),  # Reduced from 10
+        'on_drop_reward': ('weapon_drop_signal', RewTerm(func=on_drop_reward, weight=-10))  # Reduced from 15
     }
     return RewardManager(reward_functions, signal_subscriptions)
 
@@ -588,18 +587,18 @@ if __name__ == '__main__':
     # Set save settings here:
     save_handler = SaveHandler(
         agent=my_agent, # Agent to save
-        save_freq=100_000, # Save frequency
+        save_freq=50_000, # Save frequency - more frequent to catch good models
         max_saved=40, # Maximum number of saved models
         save_path='checkpoints', # Save path
-        run_name='experiment_9',
+        run_name='experiment_10',
         mode=SaveHandlerMode.FORCE # Save mode, FORCE or RESUME
     )
 
     # Set opponent settings here:
     opponent_specification = {
                     'self_play': (8, selfplay_handler),
-                    'constant_agent': (0.5, partial(ConstantAgent)),
-                    'based_agent': (1.5, partial(BasedAgent)),
+                    'constant_agent': (2, partial(ConstantAgent)),  # Increased from 0.5 to 2
+                    'based_agent': (2, partial(BasedAgent)),  # Increased from 1.5 to 2
                 }
     opponent_cfg = OpponentsCfg(opponents=opponent_specification)
 
@@ -608,6 +607,6 @@ if __name__ == '__main__':
         save_handler,
         opponent_cfg,
         CameraResolution.LOW,
-        train_timesteps=1_000_000_000,
+        train_timesteps=2_000_000,  # Increased for better learning
         train_logging=TrainLogging.PLOT
     )

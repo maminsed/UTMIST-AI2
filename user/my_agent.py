@@ -42,9 +42,11 @@ class SubmittedAgent(Agent):
 
     def _initialize(self) -> None:
         if self.file_path is None:
+            # For training: create new model
             self.model = PPO("MlpPolicy", self.env, verbose=0)
             del self.env
         else:
+            # For inference: load trained model
             self.model = PPO.load(self.file_path)
 
         # To run the sample TTNN model during inference, you can uncomment the 5 lines below:
@@ -56,6 +58,21 @@ class SubmittedAgent(Agent):
         # self.model.policy.pi_features_extractor.model = self.tt_model
 
     def _gdown(self) -> str:
+        # Option 1: Use a local checkpoint after training
+        # Try latest checkpoint first
+        experiment_dir = "checkpoints/experiment_10"
+        if os.path.isdir(experiment_dir):
+            # Find the latest checkpoint
+            files = [f for f in os.listdir(experiment_dir) if f.endswith('.zip')]
+            if files:
+                # Get the checkpoint with the highest step count
+                files.sort(key=lambda x: int(x.split('_')[-1].split('.')[0]))
+                latest_checkpoint = os.path.join(experiment_dir, files[-1])
+                if os.path.isfile(latest_checkpoint):
+                    print(f"Loading local checkpoint: {latest_checkpoint}")
+                    return latest_checkpoint
+        
+        # Option 2: Download from Google Drive
         data_path = "rl-model.zip"
         if not os.path.isfile(data_path):
             print(f"Downloading {data_path}...")
