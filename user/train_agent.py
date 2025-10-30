@@ -20,7 +20,7 @@ from torch import nn as nn
 import numpy as np
 import pygame
 from stable_baselines3 import A2C, PPO, SAC, DQN, DDPG, TD3, HER 
-from sb3_contrib import RecurrentPPO
+from sb3_contrib import QRDQN, RecurrentPPO
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
@@ -271,7 +271,7 @@ class MLPPolicy(nn.Module):
         # Hidden layer
         self.fc2 = nn.Linear(hidden_dim, hidden_dim, dtype=torch.float32)
         # Output layer
-        self.fc3 = nn.Linear(hidden_dim, hidden_dim, dtype=torch.float32)
+        self.fc3 = nn.Linear(hidden_dim, action_dim, dtype=torch.float32)
 
     def forward(self, obs):
         """
@@ -304,15 +304,53 @@ class MLPExtractor(BaseFeaturesExtractor):
             features_extractor_kwargs=dict(features_dim=features_dim, hidden_dim=hidden_dim) #NOTE: features_dim = 10 to match action space output
         )
     
+class MLPWithLayerNorm(BaseFeaturesExtractor):
+    def __init__(self, observation_space:gym.Space, features_dim:int = 64):
+        super().__init__(observation_space, features_dim)
+        in_dim = observation_space.shape[0]
+        #TODO: EXPERIMENT:
+        #   1. without LayerNorm
+        #   2. ReLu instead of SiLU
+        #   3. SiLU + dropout?
+        self.model = nn.Sequential(
+            nn.Linear(in_dim, 256), 
+            nn.LayerNorm(256),
+            nn.SiLU(),
+            nn.Linear(256,features_dim),
+            nn.LayerNorm(256),
+            nn.SiLU()
+        )
+
+    def forward(self, obs:torch.Tensor) ->torch.Tensor:
+        return self.model(obs)
+
 class CustomAgent(Agent):
-    def __init__(self, sb3_class: Optional[Type[BaseAlgorithm]] = PPO, file_path: str = None, extractor: BaseFeaturesExtractor = None):
+    def __init__(self, sb3_class: Optional[Type[BaseAlgorithm]]=QRDQN, file_path: str = None, extractor: BaseFeaturesExtractor = None):
         self.sb3_class = sb3_class
         self.extractor = extractor
         super().__init__(file_path)
     
     def _initialize(self) -> None:
+        print("initializing QRDQN network: uwu")
         if self.file_path is None:
-            self.model = self.sb3_class("MlpPolicy", self.env, policy_kwargs=self.extractor.get_policy_kwargs(), verbose=0, n_steps=30*90*3, batch_size=128, ent_coef=0.01)
+            policy_kwargs=dict(
+                n_quantiles=50,
+                features_extractor_class=MLPWithLayerNorm,
+                features_extractor_kwargs=dict(features_dim=256)
+            )
+            self.model = self.sb3_class(
+                "MlpPolicy", 
+                    self.env, 
+                    buffer_size=400_000,
+                    learning_starts=2_000,
+                    batch_size=256,
+                    gamma=0.99,
+                    train_freq=8,
+                    target_update_interval=8_000, #TODO: try with 4_000 if you see spikes later in training
+                    exploration_fraction=0.3, # TODO: EXPERIMENT: 0.5 - 0.2 
+                    verbose=0,
+                    policy_kwargs=policy_kwargs,
+                )
             del self.env
         else:
             self.model = self.sb3_class.load(self.file_path)
@@ -816,6 +854,20 @@ def weapon_stability_reward(env: WarehouseBrawl) -> float:
         return 0.01 * env.dt
     else:
         return 0.0
+    
+def jumping_on_middle(env:WarehouseBrawl):
+    """
+    reward for getting on middle
+    """
+    player: Player = env.objects['player']
+    grounded = env.obs_helper('player_grounded')
+    middle = env.obs_helper('player_moving_platform_pos')
+    edge_x = 2 // 2
+
+    x = player.body.position.x
+    
+    if middle - edge_x < x < middle + edge_x and env.dt:
+        return 2.0 * env.dt
 
 '''
 Add your dictionary of RewardFunctions here using RewTerms
@@ -827,49 +879,49 @@ def gen_reward_manager():
         'damage_interaction_reward': RewTerm(func=damage_interaction_reward, weight=10.0, params={'mode': RewardMode.SYMMETRIC}),
         
         # NEW: Advantage state reward - encourages pressure maintenance (reduced to avoid accumulation)
-        'advantage_state_reward': RewTerm(func=advantage_state_reward, weight=1.5),
+        # 'advantage_state_reward': RewTerm(func=advantage_state_reward, weight=1.5),
         
         # Whiff punishment - STRONGER to stop spam attacking air
-        'whiff_punishment_reward': RewTerm(func=whiff_punishment_reward, weight=3.0),
+        # 'whiff_punishment_reward': RewTerm(func=whiff_punishment_reward, weight=3.0),
         
         # Time pressure - prevent stalling
-        'time_pressure_reward': RewTerm(func=time_pressure_reward, weight=0.5),
+        # 'time_pressure_reward': RewTerm(func=time_pressure_reward, weight=0.5),
         
         # INCREASED: Retreat penalty - stop running away, engage!
-        'retreat_penalty': RewTerm(func=retreat_penalty, weight=1.5),
+        # 'retreat_penalty': RewTerm(func=retreat_penalty, weight=1.5),
         
         # Reduced weapon stability - let agent decide when to switch
-        'weapon_stability_reward': RewTerm(func=weapon_stability_reward, weight=0.5),
+        # 'weapon_stability_reward': RewTerm(func=weapon_stability_reward, weight=0.5),
         
         # Contextual edge avoidance - allows edge-guarding (STRONG penalty to prevent jumping off)
-        'edge_avoidance_reward': RewTerm(func=edge_avoidance_reward, weight=12.0, params={'danger_zone': 3.0}),
-        'fall_velocity_penalty': RewTerm(func=fall_velocity_penalty, weight=5.0, params={'max_safe_velocity': 60.0}),
+        # 'edge_avoidance_reward': RewTerm(func=edge_avoidance_reward, weight=12.0, params={'danger_zone': 3.0}),
+        # 'fall_velocity_penalty': RewTerm(func=fall_velocity_penalty, weight=12.0, params={'max_safe_velocity': 60.0}),
         
         # Survival bonus - encourage staying alive
-        'survival_bonus': RewTerm(func=survival_bonus, weight=3.0),
+        # 'survival_bonus': RewTerm(func=survival_bonus, weight=3.0),
         
         # INCREASED proximity/chase rewards - encourage running at opponent
-        'proximity_to_opponent_reward': RewTerm(func=proximity_to_opponent_reward, weight=3.0),
-        'head_to_opponent': RewTerm(func=head_to_opponent, weight=2.0),
-        
+        'proximity_to_opponent_reward': RewTerm(func=proximity_to_opponent_reward, weight=2.0),
+        'head_to_opponent': RewTerm(func=head_to_opponent, weight=4.0),
+        'jumping_on_middle': RewTerm(func=jumping_on_middle, weight=2.0),
         # Keep these disabled/zero
-        'danger_zone_reward': RewTerm(func=danger_zone_reward, weight=0.0),
-        'penalize_attack_reward': RewTerm(func=in_state_reward, weight=0.0),
-        'holding_more_than_3_keys': RewTerm(func=holding_more_than_3_keys, weight=0.0),
+        # 'danger_zone_reward': RewTerm(func=danger_zone_reward, weight=0.0),
+        # 'penalize_attack_reward': RewTerm(func=in_state_reward, weight=0.0),
+        # 'holding_more_than_3_keys': RewTerm(func=holding_more_than_3_keys, weight=0.0),
     }
     signal_subscriptions = {
         # TERMINAL REWARDS - These dominate to ensure winning is the main goal
         'on_win_reward': ('win_signal', RewTerm(func=on_win_reward, weight=100)),
         'on_knockout_reward': ('knockout_signal', RewTerm(func=on_knockout_reward, weight=100)),  # You KO them: +100, You get KO'd: -100 (DOUBLED)
         # Combo per extra hit - prevents dwarfing KO (weight 6-10)
-        'on_combo_reward': ('hit_during_stun', RewTerm(func=on_combo_reward, weight=8)),
+        # 'on_combo_reward': ('hit_during_stun', RewTerm(func=on_combo_reward, weight=8)),
         
         # Edge-to-KO conversion bonus
-        'edge_to_ko_bonus': ('knockout_signal', RewTerm(func=edge_to_ko_bonus, weight=1.0)),
+        # 'edge_to_ko_bonus': ('knockout_signal', RewTerm(func=edge_to_ko_bonus, weight=1.0)),
         
         # Weapon rewards - simple, no special bonuses
-        'on_equip_reward': ('weapon_equip_signal', RewTerm(func=on_equip_reward, weight=0.5)),
-        'on_drop_reward': ('weapon_drop_signal', RewTerm(func=on_drop_reward, weight=-2))
+        # 'on_equip_reward': ('weapon_equip_signal', RewTerm(func=on_equip_reward, weight=0.5)),
+        # 'on_drop_reward': ('weapon_drop_signal', RewTerm(func=on_drop_reward, weight=-2))
     }
     return RewardManager(reward_functions, signal_subscriptions)
 
@@ -881,7 +933,7 @@ The main function runs training. You can change configurations such as the Agent
 '''
 if __name__ == '__main__':
     # Start FRESH with improved rewards (RECOMMENDED)
-    my_agent = CustomAgent(sb3_class=PPO, extractor=MLPExtractor)
+    my_agent = CustomAgent(sb3_class=QRDQN, extractor=MLPExtractor)
     
     # OR: Continue from checkpoint (only if you want to try adapting old behavior):
     # my_agent = CustomAgent(sb3_class=PPO, file_path='checkpoints/experiment_fixed_v2/rl_model_XXXXXX_steps.zip', extractor=MLPExtractor)
@@ -895,7 +947,7 @@ if __name__ == '__main__':
     # Reward manager
     reward_manager = gen_reward_manager()
     # Self-play settings
-    selfplay_handler = SelfPlayRandom(
+    selfplay_handler = SelfPlayLatest(
         partial(type(my_agent)), # Agent class and its keyword arguments
                                  # type(my_agent) = Agent class
     )
@@ -912,9 +964,10 @@ if __name__ == '__main__':
 
     # Set opponent settings here:
     opponent_specification = {
-                    'self_play': (8, selfplay_handler),
-                    'constant_agent': (2, partial(ConstantAgent)),  # Increased from 0.5 to 2
-                    'based_agent': (2, partial(BasedAgent)),  # Increased from 1.5 to 2
+                    'self_play': (5, selfplay_handler), #start chill
+                    'constant_agent': (5, partial(ConstantAgent)), # 1. decrease this
+                    'based_agent': (0.1, partial(BasedAgent)),  # 1. Increase this later
+                    'clockwork_agent': (0.1,partial(ClockworkAgent)) #1. Increase this
                 }
     opponent_cfg = OpponentsCfg(opponents=opponent_specification)
 

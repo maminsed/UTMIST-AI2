@@ -18,8 +18,8 @@ import os
 import gdown
 from typing import Optional
 from environment.agent import Agent
-from stable_baselines3 import PPO, A2C # Sample RL Algo imports
-from sb3_contrib import RecurrentPPO # Importing an LSTM
+# from stable_baselines3 import PPO, A2C # Sample RL Algo imports
+from sb3_contrib import QRDQN # Importing an LSTM
 
 # To run the sample TTNN model, you can uncomment the 2 lines below: 
 # import ttnn
@@ -43,11 +43,23 @@ class SubmittedAgent(Agent):
     def _initialize(self) -> None:
         if self.file_path is None:
             # For training: create new model
-            self.model = PPO("MlpPolicy", self.env, verbose=0)
+            self.model = QRDQN(
+                    "MlpPolicy", 
+                    self.env, 
+                    buffer_size=400_000,
+                    learning_starts=2_000,
+                    batch_size=256,
+                    gamma=0.99,
+                    train_freq=8,
+                    target_update_interval=8_000,
+                    exploration_fraction=0.5, # lower it if you want it to learn faster
+                    verbose=0,
+                    policy_kwargs={'n_quantiles':50},
+                )
             del self.env
         else:
             # For inference: load trained model
-            self.model = PPO.load(self.file_path)
+            self.model = QRDQN.load(self.file_path)
 
         # To run the sample TTNN model during inference, you can uncomment the 5 lines below:
         # This assumes that your self.model.policy has the MLPPolicy architecture defined in `train_agent.py` or `my_agent_tt.py`
