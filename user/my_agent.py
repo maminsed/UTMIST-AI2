@@ -39,6 +39,7 @@ class SubmittedAgent(Agent):
         self.time = 0
         self.prev_pos = None
         self.down = False
+        self.recover = False
 
     def predict(self, obs):
         self.time += 1
@@ -52,18 +53,26 @@ class SubmittedAgent(Agent):
         else:
             self.prev_pos = pos
 
+        self.recover = False
         if pos[0] < -6.9:
             action = self.act_helper.press_keys(['d'], action)
+            self.recover = True
         elif pos[0] > -1.9 and pos[0] < 0:
             action = self.act_helper.press_keys(['a'], action)
+            self.recover = True
         elif pos[0] > 0 and pos[0] < 1.9:
             action = self.act_helper.press_keys(['d'], action)
+            self.recover = True
         elif pos[0] > 6.9:
             action = self.act_helper.press_keys(['a'], action)
+            self.recover = True
 
         # Jump if falling
-        if (self.down and self.time % 11 == 0) or pos[1] > 5:
-            action = self.act_helper.press_keys(['space'], action)
+        if self.down and self.time % 11 == 0 and self.recover:
+            if self.obs_helper.get_section(obs, "player_recoveries_left") > 0:
+                action = self.act_helper.press_keys(['k'], action)
+            else:
+                action = self.act_helper.press_keys(['space'], action)
 
         # Attack if near
         if (pos[0] - opp_pos[0])**2 + (pos[1] - opp_pos[1])**2 < 4.0:
