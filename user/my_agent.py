@@ -46,11 +46,16 @@ class SubmittedAgent(Agent):
         opp_pos = self.obs_helper.get_section(obs, 'opponent_pos')
         opp_KO = self.obs_helper.get_section(obs, 'opponent_state') in [5, 11]
         action = self.act_helper.zeros()
+        xdist = (opp_pos[0] - pos[0])
+        ydist = (opp_pos[1] - pos[1])
+        eudist = xdist**2 + ydist**2 #right is positive, left is negative
 
         if self.prev_pos is not None:
             self.down = (pos[1] - self.prev_pos[1]) > 0.00
         else:
             self.prev_pos = pos
+
+        
 
         if pos[0] < -6.9:
             action = self.act_helper.press_keys(['d'], action)
@@ -65,7 +70,23 @@ class SubmittedAgent(Agent):
         if (self.down and self.time % 11 == 0) or pos[1] > 5:
             action = self.act_helper.press_keys(['space'], action)
 
+        # to face the player
+        if whichPlatform(pos) and whichPlatform(opp_pos) == whichPlatform(pos):
+            if xdist > 0:
+                action = self.act_helper.press_keys(['d'], action)
+            elif xdist < 0:
+                action = self.act_helper.press_keys(['a'], action)
+
         # Attack if near
-        if (pos[0] - opp_pos[0])**2 + (pos[1] - opp_pos[1])**2 < 4.0:
+        if eudist < 4.0:
             action = self.act_helper.press_keys(['k'], action)
+
+        
         return action
+
+def whichPlatform(position:list[str,str])->int:
+    if position[0] > -6.9 and position[0] < -1.9:
+        return 1
+    elif position[0] > 1.9 and position[0] < 6.9:
+        return 2
+    return 0
