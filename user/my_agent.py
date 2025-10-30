@@ -39,12 +39,39 @@ class SubmittedAgent(Agent):
         self.time = 0
         self.prev_pos = None
         self.down = False
+        self.state_mapping = [
+            'WalkingState',
+            'StandingState',
+            'TurnaroundState',
+            'AirTurnaroundState',
+            'SprintingState',
+            'StunState',
+            'InAirState',
+            'DodgeState',
+            'AttackState',
+            'DashState',
+            'BackDashState',
+            'KOState',
+            'TauntState',
+        ]
 
     def predict(self, obs):
         self.time += 1
         pos = self.obs_helper.get_section(obs, 'player_pos')
+        player_grounded = self.obs_helper.get_section(obs,'player_grounded')
+        
         opp_pos = self.obs_helper.get_section(obs, 'opponent_pos')
-        opp_KO = self.obs_helper.get_section(obs, 'opponent_state') in [5, 11]
+        opp_state = self.state_mapping[int(self.obs_helper.get_section(obs, 'opponent_state')[0])]
+
+        moving_pos:list[int] = self.obs_helper.get_section(obs, 'player_moving_platform_pos')
+        moving_vel:list[int] = self.obs_helper.get_section(obs, 'player_moving_platform_vel')
+
+        moving_start,moving_end = [moving_pos[0]-1,moving_pos[1]],[moving_pos[1]-1,moving_pos[1]]
+
+        if self.time % 300 == 0:
+            print("grounded")
+            print(player_grounded)
+
         action = self.act_helper.zeros()
         xdist = (opp_pos[0] - pos[0])
         ydist = (opp_pos[1] - pos[1])
@@ -55,13 +82,15 @@ class SubmittedAgent(Agent):
         else:
             self.prev_pos = pos
 
-        
-
         if pos[0] < -6.9:
             action = self.act_helper.press_keys(['d'], action)
-        elif pos[0] > -1.9 and pos[0] < 0:
+        elif pos[0] > -1.9 and pos[0] < moving_start[0]-2:
             action = self.act_helper.press_keys(['a'], action)
-        elif pos[0] > 0 and pos[0] < 1.9:
+        elif pos[0] >= moving_start[0]-2 and pos[0] < moving_start[0]+0.1:
+            action = self.act_helper.press_keys(['d'],action)
+        elif pos[0] >= moving_end[0]-0.1 and pos[0] < moving_end[0]+2:
+            action = self.act_helper.press_keys(['a'],action)
+        elif pos[0] > moving_end[0]+2 and pos[0] < 1.9:
             action = self.act_helper.press_keys(['d'], action)
         elif pos[0] > 6.9:
             action = self.act_helper.press_keys(['a'], action)
@@ -71,7 +100,7 @@ class SubmittedAgent(Agent):
             action = self.act_helper.press_keys(['space'], action)
 
         # to face the player
-        if whichPlatform(pos) and whichPlatform(opp_pos) == whichPlatform(pos):
+        if self.whichPlatform(pos) and self.whichPlatform(opp_pos) == self.whichPlatform(pos):
             if xdist > 0:
                 action = self.act_helper.press_keys(['d'], action)
             elif xdist < 0:
@@ -79,14 +108,17 @@ class SubmittedAgent(Agent):
 
         # Attack if near
         if eudist < 4.0:
-            action = self.act_helper.press_keys(['k'], action)
-
+            action = self.act_helper.press_keys(['j'], action)
+        if opp_state == 'KOState' and self.whichPlatform(pos):
+            action = self.act_helper.press_keys(['g'],action)
         
         return action
 
-def whichPlatform(position:list[str,str])->int:
-    if position[0] > -6.9 and position[0] < -1.9:
-        return 1
-    elif position[0] > 1.9 and position[0] < 6.9:
-        return 2
-    return 0
+    def whichPlatform(self, position:list[str,str])->int:
+        if position[0] > -6.9 and position[0] < -1.9:
+            return 1
+        elif position[0] > 1.9 and position[0] < 6.9:
+            return 2
+        return 0
+
+    
