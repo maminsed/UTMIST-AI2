@@ -426,13 +426,16 @@ class CustomAgent(Agent):
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
             print(f"Using device: {device}")
             
+            # Wrap env in BoxToMultiBinary10 for proper action space
+            wrapped_env = BoxToMultiBinary10(self.env)
+            
             policy_kwargs=dict(
                 features_extractor_class=MLPWithLayerNorm,
                 features_extractor_kwargs=dict(features_dim=256)
             )
             self.model = self.sb3_class(
                 "MlpPolicy", 
-                    self.env, 
+                    wrapped_env, 
                     n_steps=2048,          # rollout length per update
                     batch_size=256,        # minibatch size
                     n_epochs=10,           # updates per batch
@@ -729,8 +732,8 @@ def no_input_penalty(env: WarehouseBrawl) -> float:
     Punish doing nothing at all this frame
     """
     player = env.objects["player"]
-    x = player.body.positoin.x
-    y = player.body.positoin.y
+    x = player.body.position.x
+    y = player.body.position.y
     prev_x = player.prev_x
     prev_y = player.prev_y
     dist = (x-prev_x)**2 + (y-prev_y) ** 2
@@ -1130,7 +1133,7 @@ def gen_reward_manager(numCheckpoint:int):
         'proximity_to_opponent_reward': RewTerm(func=proximity_to_opponent_reward, weight=currCheckPoint['proximity_to_opponent_reward']), 
         'head_to_opponent': RewTerm(func=head_to_opponent, weight=currCheckPoint['head_to_opponent']), 
         'jumping_on_middle': RewTerm(func=jumping_on_middle, weight=currCheckPoint['jumping_on_middle']), # checkpoint-driven weights
-        'no_input_penalty': RewTerm(func=no_input_penalty, weight=currCheckPoint.get('no_input_penalty',0.0))
+        'no_input_penalty': RewTerm(func=no_input_penalty, weight=currCheckPoint.get('no_input_penalty',0.0)),
         
         # Keep these disabled/zero
         # 'stage_control': RewTerm(func=stage_control, weight=currCheckPoint.get('stage_control', 0.0))
@@ -1175,7 +1178,7 @@ if __name__ == '__main__':
     # my_agent = CustomAgent(sb3_class=QRDQN, extractor=MLPExtractor)
     
     # OR: Continue from checkpoint (only if you want to try adapting old behavior):
-    my_agent = CustomAgent(sb3_class=PPO, file_path='checkpoints/num2/rl_model_800000_steps.zip', extractor=MLPWithLayerNorm)
+    my_agent = CustomAgent(sb3_class=PPO, file_path=None, extractor=MLPWithLayerNorm)
 
     # Start here if you want to train from scratch. e.g:
     #my_agent = RecurrentPPOAgent()
