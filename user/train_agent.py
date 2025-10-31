@@ -390,7 +390,7 @@ class CustomAgent(Agent):
         self.model.save(file_path, include=['num_timesteps'])
 
     def learn(self, env, total_timesteps, log_interval: int = 1, verbose=0):
-        self.model.set_env(env)
+        self.model.set_env(DiscreteToBinary10(env))
         self.model.verbose = verbose
         self.model.learn(
             total_timesteps=total_timesteps,
@@ -887,7 +887,7 @@ def jumping_on_middle(env:WarehouseBrawl):
     x = player.body.position.x
     
     if middle - edge_x < x < middle + edge_x and env.dt:
-        return 2.0 * env.dt
+        return 2.0
 
 '''
 Add your dictionary of RewardFunctions here using RewTerms
@@ -978,7 +978,7 @@ if __name__ == '__main__':
         save_freq=50_000, # Save frequency - more frequent to catch good models
         max_saved=40, # Maximum number of saved models
         save_path='checkpoints', # Save path
-        run_name='experiment_aggressive_v3',  # Fresh training with aggressive chase + no whiffs
+        run_name='amin',  # Fresh training with aggressive chase + no whiffs
         mode=SaveHandlerMode.FORCE  # Start completely fresh
     )
 
@@ -986,8 +986,8 @@ if __name__ == '__main__':
     opponent_specification = {
                     'self_play': (5, selfplay_handler), #start chill
                     'constant_agent': (5, partial(ConstantAgent)), # 1. decrease this
-                    'based_agent': (0.1, partial(BasedAgent)),  # 1. Increase this later
-                    'clockwork_agent': (0.1,partial(ClockworkAgent)) #1. Increase this
+                    'based_agent': (0, partial(BasedAgent)),  # 1. Increase this later
+                    'clockwork_agent': (0,partial(ClockworkAgent)) #1. Increase this
                 }
     opponent_cfg = OpponentsCfg(opponents=opponent_specification)
 
