@@ -624,7 +624,7 @@ def head_to_opponent(
 
     # Apply penalty if the player is in the danger zone
     multiplier = -1 if player.body.position.x > opponent.body.position.x else 1
-    reward = clip_reward(multiplier * env.dt *(player.body.position.x - player.prev_x),-1,1)
+    reward = clip_reward(multiplier * (player.body.position.x - player.prev_x),-1,1)
 
     return reward
 
@@ -963,19 +963,15 @@ def jumping_on_middle(env:WarehouseBrawl):
     reward for getting on middle
     """
     player: Player = env.objects['player']
-    platform = env.objects['platform1']  # This is the moving platform
-
-    edge_x = 1  # Platform half-width (from environment code)
-    # Get platform position directly from environment object
-    platform_x = platform.body.position.x
-    platform_y = platform.body.position.y
+    middle = env.obs_helper('player_moving_platform_pos')
+    edge_x = 2 // 2
 
     x = player.body.position.x
     y = player.body.position.y
     
-    if platform_x - edge_x < x < platform_x + edge_x and platform_y > y:
-        return 2.0 * env.dt
-    return 0.0 
+    if middle[0] - edge_x < x < middle[0] + edge_x and middle[1] > y:
+        return 2.0
+    return 0.0
 
 def whichPlatform(x,y,positionMap):
     """
@@ -1017,40 +1013,6 @@ def stage_control(env:WarehouseBrawl):
         else:
             return -opponent_dist / (x_end - x_start)
     return 0.0
-
-def idle_penalty(env: WarehouseBrawl) -> float:
-    """
-    Penalize player for being idle (low velocity)
-    """
-    p = env.objects["player"]
-    vx, vy = p.body.velocity.x, p.body.velocity.y
-    if abs(vx) < 0.5 and abs(vy) < 0.5:
-        return -0.1 * env.dt
-    return 0.0
-
-def no_input_penalty(env: WarehouseBrawl) -> float:
-    """
-    Punish doing nothing at all this frame
-    """
-    a = env.objects["player"].cur_action
-    return (-0.05 * env.dt) if (a <= 0.5).all() else 0.0
-
-def forward_progress_reward(env: WarehouseBrawl) -> float:
-    """
-    Always pay for moving toward opponent this frame
-    """
-    p = env.objects["player"]
-    o = env.objects["opponent"]
-    dx = p.body.position.x - p.prev_x
-    sign = 1 if p.body.position.x < o.body.position.x else -1
-    return sign * dx  # positive if moved toward, negative if moved away
-
-def min_speed_reward(env: WarehouseBrawl) -> float:
-    """
-    Small bonus for having some horizontal speed, 0 when already fast
-    """
-    vx = abs(env.objects["player"].body.velocity.x)
-    return min(vx, 1.0) * 0.02 * env.dt
 
 '''
 Add your dictionary of RewardFunctions here using RewTerms
@@ -1200,7 +1162,7 @@ if __name__ == '__main__':
         save_freq=50_000, # Save frequency - more frequent to catch good models
         max_saved=40, # Maximum number of saved models
         save_path='checkpoints', # Save path
-        run_name='zzz',  # Fresh training with aggressive chase + no whiffs
+        run_name='amin',  # Fresh training with aggressive chase + no whiffs
         mode=SaveHandlerMode.RESUME  # Start completely fresh
     )
 
