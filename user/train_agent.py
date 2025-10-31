@@ -31,104 +31,104 @@ from typing import Optional, Type, List, Tuple
 # ----------------------------- AGENT CLASSES -----------------------------
 # -------------------------------------------------------------------------
 
-class SB3Agent(Agent):
-    '''
-    SB3Agent:
-    - Defines an AI Agent that takes an SB3 class input for specific SB3 algorithm (e.g. PPO, SAC)
-    Note:
-    - For all SB3 classes, if you'd like to define your own neural network policy you can modify the `policy_kwargs` parameter in `self.sb3_class()` or make a custom SB3 `BaseFeaturesExtractor`
-    You can refer to this for Custom Policy: https://stable-baselines3.readthedocs.io/en/master/guide/custom_policy.html
-    '''
-    def __init__(
-            self,
-            sb3_class: Optional[Type[BaseAlgorithm]] = PPO,
-            file_path: Optional[str] = None
-    ):
-        self.sb3_class = sb3_class
-        super().__init__(file_path)
+# class SB3Agent(Agent):
+#     '''
+#     SB3Agent:
+#     - Defines an AI Agent that takes an SB3 class input for specific SB3 algorithm (e.g. PPO, SAC)
+#     Note:
+#     - For all SB3 classes, if you'd like to define your own neural network policy you can modify the `policy_kwargs` parameter in `self.sb3_class()` or make a custom SB3 `BaseFeaturesExtractor`
+#     You can refer to this for Custom Policy: https://stable-baselines3.readthedocs.io/en/master/guide/custom_policy.html
+#     '''
+#     def __init__(
+#             self,
+#             sb3_class: Optional[Type[BaseAlgorithm]] = PPO,
+#             file_path: Optional[str] = None
+#     ):
+#         self.sb3_class = sb3_class
+#         super().__init__(file_path)
 
-    def _initialize(self) -> None:
-        if self.file_path is None:
-            self.model = self.sb3_class("MlpPolicy", self.env, verbose=0, n_steps=30*90*3, batch_size=128, ent_coef=0.01)
-            del self.env
-        else:
-            self.model = self.sb3_class.load(self.file_path)
+#     def _initialize(self) -> None:
+#         if self.file_path is None:
+#             self.model = self.sb3_class("MlpPolicy", self.env, verbose=0, n_steps=30*90*3, batch_size=128, ent_coef=0.01)
+#             del self.env
+#         else:
+#             self.model = self.sb3_class.load(self.file_path)
 
-    def _gdown(self) -> str:
-        # Call gdown to your link
-        return
+#     def _gdown(self) -> str:
+#         # Call gdown to your link
+#         return
 
-    #def set_ignore_grad(self) -> None:
-        #self.model.set_ignore_act_grad(True)
+#     #def set_ignore_grad(self) -> None:
+#         #self.model.set_ignore_act_grad(True)
 
-    def predict(self, obs):
-        action, _ = self.model.predict(obs)
-        return action
+#     def predict(self, obs):
+#         action, _ = self.model.predict(obs)
+#         return action
 
-    def save(self, file_path: str) -> None:
-        self.model.save(file_path, include=['num_timesteps'])
+#     def save(self, file_path: str) -> None:
+#         self.model.save(file_path, include=['num_timesteps'])
 
-    def learn(self, env, total_timesteps, log_interval: int = 1, verbose=0):
-        self.model.set_env(env)
-        self.model.verbose = verbose
-        self.model.learn(
-            total_timesteps=total_timesteps,
-            log_interval=log_interval,
-        )
+#     def learn(self, env, total_timesteps, log_interval: int = 1, verbose=0):
+#         self.model.set_env(env)
+#         self.model.verbose = verbose
+#         self.model.learn(
+#             total_timesteps=total_timesteps,
+#             log_interval=log_interval,
+#         )
 
-class RecurrentPPOAgent(Agent):
-    '''
-    RecurrentPPOAgent:
-    - Defines an RL Agent that uses the Recurrent PPO (LSTM+PPO) algorithm
-    '''
-    def __init__(
-            self,
-            file_path: Optional[str] = None
-    ):
-        super().__init__(file_path)
-        self.lstm_states = None
-        self.episode_starts = np.ones((1,), dtype=bool)
+# class RecurrentPPOAgent(Agent):
+#     '''
+#     RecurrentPPOAgent:
+#     - Defines an RL Agent that uses the Recurrent PPO (LSTM+PPO) algorithm
+#     '''
+#     def __init__(
+#             self,
+#             file_path: Optional[str] = None
+#     ):
+#         super().__init__(file_path)
+#         self.lstm_states = None
+#         self.episode_starts = np.ones((1,), dtype=bool)
 
-    def _initialize(self) -> None:
-        if self.file_path is None:
-            policy_kwargs = {
-                'activation_fn': nn.ReLU,
-                'lstm_hidden_size': 512,
-                'net_arch': [dict(pi=[32, 32], vf=[32, 32])],
-                'shared_lstm': True,
-                'enable_critic_lstm': False,
-                'share_features_extractor': True,
+#     def _initialize(self) -> None:
+#         if self.file_path is None:
+#             policy_kwargs = {
+#                 'activation_fn': nn.ReLU,
+#                 'lstm_hidden_size': 512,
+#                 'net_arch': [dict(pi=[32, 32], vf=[32, 32])],
+#                 'shared_lstm': True,
+#                 'enable_critic_lstm': False,
+#                 'share_features_extractor': True,
 
-            }
-            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-            print(f"Using device: {device}")
-            self.model = RecurrentPPO("MlpLstmPolicy",
-                                      self.env,
-                                      verbose=0,
-                                      n_steps=30*90*20,
-                                      batch_size=16,
-                                      ent_coef=0.05,
-                                      policy_kwargs=policy_kwargs,
-                                      device=device)
-            del self.env
-        else:
-            self.model = RecurrentPPO.load(self.file_path)
+#             }
+#             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#             print(f"Using device: {device}")
+#             self.model = RecurrentPPO("MlpLstmPolicy",
+#                                       self.env,
+#                                       verbose=0,
+#                                       n_steps=30*90*20,
+#                                       batch_size=16,
+#                                       ent_coef=0.05,
+#                                       policy_kwargs=policy_kwargs,
+#                                       device=device)
+#             del self.env
+#         else:
+#             self.model = RecurrentPPO.load(self.file_path)
 
-    def reset(self) -> None:
-        self.episode_starts = True
+#     def reset(self) -> None:
+#         self.episode_starts = True
 
-    def predict(self, obs):
-        action, self.lstm_states = self.model.predict(obs, state=self.lstm_states, episode_start=self.episode_starts, deterministic=True)
-        if self.episode_starts: self.episode_starts = False
-        return action
+#     def predict(self, obs):
+#         action, self.lstm_states = self.model.predict(obs, state=self.lstm_states, episode_start=self.episode_starts, deterministic=True)
+#         if self.episode_starts: self.episode_starts = False
+#         return action
 
-    def save(self, file_path: str) -> None:
-        self.model.save(file_path)
+#     def save(self, file_path: str) -> None:
+#         self.model.save(file_path)
 
-    def learn(self, env, total_timesteps, log_interval: int = 2, verbose=0):
-        self.model.set_env(env)
-        self.model.verbose = verbose
-        self.model.learn(total_timesteps=total_timesteps, log_interval=log_interval)
+#     def learn(self, env, total_timesteps, log_interval: int = 2, verbose=0):
+#         self.model.set_env(env)
+#         self.model.verbose = verbose
+#         self.model.learn(total_timesteps=total_timesteps, log_interval=log_interval)
 
 class EasyHardCodedBot(Agent):
     '''
@@ -278,99 +278,99 @@ class UserInputAgent(Agent):
 
         return action
 
-class ClockworkAgent(Agent):
-    '''
-    ClockworkAgent:
-    - Defines an Agent that performs sequential steps of [duration, action]
-    '''
-    def __init__(
-            self,
-            action_sheet: Optional[List[Tuple[int, List[str]]]] = None,
-            *args,
-            **kwargs
-    ):
-        super().__init__(*args, **kwargs)
+# class ClockworkAgent(Agent):
+#     '''
+#     ClockworkAgent:
+#     - Defines an Agent that performs sequential steps of [duration, action]
+#     '''
+#     def __init__(
+#             self,
+#             action_sheet: Optional[List[Tuple[int, List[str]]]] = None,
+#             *args,
+#             **kwargs
+#     ):
+#         super().__init__(*args, **kwargs)
 
-        self.steps = 0
-        self.current_action_end = 0  # Tracks when the current action should stop
-        self.current_action_data = None  # Stores the active action
-        self.action_index = 0  # Index in the action sheet
+#         self.steps = 0
+#         self.current_action_end = 0  # Tracks when the current action should stop
+#         self.current_action_data = None  # Stores the active action
+#         self.action_index = 0  # Index in the action sheet
 
-        if action_sheet is None:
-            self.action_sheet = [
-                (10, ['a']),
-                (1, ['l']),
-                (20, ['a']),
-                (3, ['a', 'j']),
-                (15, ['space']),
-            ]
-        else:
-            self.action_sheet = action_sheet
+#         if action_sheet is None:
+#             self.action_sheet = [
+#                 (10, ['a']),
+#                 (1, ['l']),
+#                 (20, ['a']),
+#                 (3, ['a', 'j']),
+#                 (15, ['space']),
+#             ]
+#         else:
+#             self.action_sheet = action_sheet
 
-    def predict(self, obs):
-        """
-        Returns an action vector based on the predefined action sheet.
-        """
-        # Check if the current action has expired
-        if self.steps >= self.current_action_end and self.action_index < len(self.action_sheet):
-            hold_time, action_data = self.action_sheet[self.action_index]
-            self.current_action_data = action_data  # Store the action
-            self.current_action_end = self.steps + hold_time  # Set duration
-            self.action_index += 1  # Move to the next action
+#     def predict(self, obs):
+#         """
+#         Returns an action vector based on the predefined action sheet.
+#         """
+#         # Check if the current action has expired
+#         if self.steps >= self.current_action_end and self.action_index < len(self.action_sheet):
+#             hold_time, action_data = self.action_sheet[self.action_index]
+#             self.current_action_data = action_data  # Store the action
+#             self.current_action_end = self.steps + hold_time  # Set duration
+#             self.action_index += 1  # Move to the next action
 
-        # Apply the currently active action
-        action = self.act_helper.press_keys(self.current_action_data)
-        self.steps += 1  # Increment step counter
-        return action
+#         # Apply the currently active action
+#         action = self.act_helper.press_keys(self.current_action_data)
+#         self.steps += 1  # Increment step counter
+#         return action
 
 
 
-class MLPExtractor(BaseFeaturesExtractor):
-    '''
-    Class that defines an MLP Base Features Extractor
-    '''
-    def __init__(self, observation_space: gym.Space, features_dim: int = 64, hidden_dim: int = 64):
-        super(MLPExtractor, self).__init__(observation_space, features_dim)
+# class MLPExtractor(BaseFeaturesExtractor):
+#     '''
+#     Class that defines an MLP Base Features Extractor
+#     '''
+#     def __init__(self, observation_space: gym.Space, features_dim: int = 64, hidden_dim: int = 64):
+#         super(MLPExtractor, self).__init__(observation_space, features_dim)
         
-        self.model = MLPPolicy(
-            obs_dim=observation_space.shape[0], 
-            action_dim=10,
-            hidden_dim=hidden_dim,
-        )
+#         self.model = MLPPolicy(
+#             obs_dim=observation_space.shape[0], 
+#             action_dim=10,
+#             hidden_dim=hidden_dim,
+#         )
     
-    def forward(self, obs: torch.Tensor) -> torch.Tensor:
-        return self.model(obs)
+#     def forward(self, obs: torch.Tensor) -> torch.Tensor:
+#         return self.model(obs)
     
-    @classmethod
-    def get_policy_kwargs(cls, features_dim: int = 64, hidden_dim: int = 64) -> dict:
-        return dict(
-            features_extractor_class=cls,
-            features_extractor_kwargs=dict(features_dim=features_dim, hidden_dim=hidden_dim) #NOTE: features_dim = 10 to match action space output
-        )  
+#     @classmethod
+#     def get_policy_kwargs(cls, features_dim: int = 64, hidden_dim: int = 64) -> dict:
+#         return dict(
+#             features_extractor_class=cls,
+#             features_extractor_kwargs=dict(features_dim=features_dim, hidden_dim=hidden_dim) #NOTE: features_dim = 10 to match action space output
+#         )  
 
-class MLPPolicy(nn.Module):
-    def __init__(self, obs_dim: int = 64, action_dim: int = 10, hidden_dim: int = 64):
-        """
-        A 3-layer MLP policy:
-        obs -> Linear(hidden_dim) -> ReLU -> Linear(hidden_dim) -> ReLU -> Linear(action_dim)
-        """
-        super(MLPPolicy, self).__init__()
+# class MLPPolicy(nn.Module):
+#     def __init__(self, obs_dim: int = 64, action_dim: int = 10, hidden_dim: int = 64):
+#         """
+#         A 3-layer MLP policy:
+#         obs -> Linear(hidden_dim) -> ReLU -> Linear(hidden_dim) -> ReLU -> Linear(action_dim)
+#         """
+#         super(MLPPolicy, self).__init__()
 
-        # Input layer
-        self.fc1 = nn.Linear(obs_dim, hidden_dim, dtype=torch.float32)
-        # Hidden layer
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim, dtype=torch.float32)
-        # Output layer
-        self.fc3 = nn.Linear(hidden_dim, action_dim, dtype=torch.float32)
+#         # Input layer
+#         self.fc1 = nn.Linear(obs_dim, hidden_dim, dtype=torch.float32)
+#         # Hidden layer
+#         self.fc2 = nn.Linear(hidden_dim, hidden_dim, dtype=torch.float32)
+#         # Output layer
+#         self.fc3 = nn.Linear(hidden_dim, action_dim, dtype=torch.float32)
 
-    def forward(self, obs):
-        """
-        obs: [batch_size, obs_dim]
-        returns: [batch_size, action_dim]
-        """
-        x = F.relu(self.fc1(obs))
-        x = F.relu(self.fc2(x))
-        return self.fc3(x)
+#     def forward(self, obs):
+#         """
+#         obs: [batch_size, obs_dim]
+#         returns: [batch_size, action_dim]
+#         """
+#         x = F.relu(self.fc1(obs))
+#         x = F.relu(self.fc2(x))
+#         return self.fc3(x)
 
 
 
@@ -1068,7 +1068,7 @@ def gen_reward_manager(numCheckpoint:int):
         1: {
             'damage_interaction_reward': 15.0,
             'advantage_state_reward': 0.0,
-            'whiff_punishment_reward': 4.0,
+            'whiff_punishment_reward': 2.0,
             'weapon_stability_reward': 0.0,
             'proximity_to_opponent_reward': 2.0,
             'head_to_opponent': 4.0,
@@ -1170,7 +1170,7 @@ if __name__ == '__main__':
     # my_agent = CustomAgent(sb3_class=QRDQN, extractor=MLPExtractor)
     
     # OR: Continue from checkpoint (only if you want to try adapting old behavior):
-    my_agent = CustomAgent(sb3_class=PPO, file_path='checkpoints/num2/rl_model_800000_steps.zip', extractor=MLPExtractor)
+    my_agent = CustomAgent(sb3_class=PPO, file_path='checkpoints/num2/rl_model_800000_steps.zip', extractor=MLPWithLayerNorm)
 
     # Start here if you want to train from scratch. e.g:
     #my_agent = RecurrentPPOAgent()
@@ -1200,24 +1200,26 @@ if __name__ == '__main__':
 
     # Set opponent settings here:
     opponent_spec0 = {
-                    'self_play': (2.5, selfplay_handler),
-                    'self_play_random': (2.5,selfplay_random),
-                    'constant_agent': (5, partial(ConstantAgent)),
+                    'self_play': (3, selfplay_handler),
+                    'self_play_random': (0,selfplay_random),
+                    'constant_agent': (7, partial(ConstantAgent)),
                     'easy_hard_coded_bot': (0, partial(EasyHardCodedBot)),
                     'hard_hard_coded_bot': (0,partial(HardHardCodedBot))
                 }
     
     opponent_spec1 = {
         'self_play': (4, selfplay_handler),
-        'constant_agent': (2, partial(ConstantAgent)),
-        'easy_hard_coded_bot': (4, partial(EasyHardCodedBot)),
+        'self_play_random': (2,selfplay_random),
+        'constant_agent': (1, partial(ConstantAgent)),
+        'easy_hard_coded_bot': (3, partial(EasyHardCodedBot)),
         'hard_hard_coded_bot': (0,partial(HardHardCodedBot))
     }   
 
     opponent_spec2 = {
-        'self_play': (6, selfplay_handler),
+        'self_play': (5, selfplay_handler),
+        'self_play_random': (2,selfplay_random),
         'constant_agent': (0, partial(ConstantAgent)),
-        'easy_hard_coded_bot': (3, partial(EasyHardCodedBot)),
+        'easy_hard_coded_bot': (2, partial(EasyHardCodedBot)),
         'hard_hard_coded_bot': (1,partial(HardHardCodedBot))
     }
 

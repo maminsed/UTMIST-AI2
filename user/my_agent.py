@@ -28,7 +28,7 @@ from sb3_contrib import QRDQN # Importing an LSTM
 # import ttnn
 # from user.my_agent_tt import TTMLPPolicy
 
-class BoxToMultiBinary10(gym.ActionWrapper):
+class BoxToMultiBinary10(ActionWrapper):
     """
     Expose MultiBinary(10) to the algo, while the underlying env still accepts Box(0,1, (10,))
     with threshold 0.5. We feed exact 0/1 floats to avoid nondifferentiable, off-policy thresholds.
