@@ -749,7 +749,7 @@ def proximity_to_opponent_reward(env: WarehouseBrawl) -> float:
     # Inverse relationship: closer gets more reward
     if distance < max_distance:
         reward = (max_distance - distance) / max_distance
-        return reward * env.dt * 0.05  # INCREASED per-frame reward
+        return reward * 0.0005  # INCREASED per-frame reward
     
     return 0.0
 
@@ -934,7 +934,7 @@ def gen_reward_manager():
     signal_subscriptions = {
         # TERMINAL REWARDS - These dominate to ensure winning is the main goal
         'on_win_reward': ('win_signal', RewTerm(func=on_win_reward, weight=100)),
-        'on_knockout_reward': ('knockout_signal', RewTerm(func=on_knockout_reward, weight=100)),  # You KO them: +100, You get KO'd: -100 (DOUBLED)
+        'on_knockout_reward': ('knockout_signal', RewTerm(func=on_knockout_reward, weight=20)),  # You KO them: +100, You get KO'd: -100 (DOUBLED)
         # Combo per extra hit - prevents dwarfing KO (weight 6-10)
         # 'on_combo_reward': ('hit_during_stun', RewTerm(func=on_combo_reward, weight=8)),
         
