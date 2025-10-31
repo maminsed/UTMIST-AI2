@@ -31,104 +31,104 @@ from typing import Optional, Type, List, Tuple
 # ----------------------------- AGENT CLASSES -----------------------------
 # -------------------------------------------------------------------------
 
-class SB3Agent(Agent):
-    '''
-    SB3Agent:
-    - Defines an AI Agent that takes an SB3 class input for specific SB3 algorithm (e.g. PPO, SAC)
-    Note:
-    - For all SB3 classes, if you'd like to define your own neural network policy you can modify the `policy_kwargs` parameter in `self.sb3_class()` or make a custom SB3 `BaseFeaturesExtractor`
-    You can refer to this for Custom Policy: https://stable-baselines3.readthedocs.io/en/master/guide/custom_policy.html
-    '''
-    def __init__(
-            self,
-            sb3_class: Optional[Type[BaseAlgorithm]] = PPO,
-            file_path: Optional[str] = None
-    ):
-        self.sb3_class = sb3_class
-        super().__init__(file_path)
+# class SB3Agent(Agent):
+#     '''
+#     SB3Agent:
+#     - Defines an AI Agent that takes an SB3 class input for specific SB3 algorithm (e.g. PPO, SAC)
+#     Note:
+#     - For all SB3 classes, if you'd like to define your own neural network policy you can modify the `policy_kwargs` parameter in `self.sb3_class()` or make a custom SB3 `BaseFeaturesExtractor`
+#     You can refer to this for Custom Policy: https://stable-baselines3.readthedocs.io/en/master/guide/custom_policy.html
+#     '''
+#     def __init__(
+#             self,
+#             sb3_class: Optional[Type[BaseAlgorithm]] = PPO,
+#             file_path: Optional[str] = None
+#     ):
+#         self.sb3_class = sb3_class
+#         super().__init__(file_path)
 
-    def _initialize(self) -> None:
-        if self.file_path is None:
-            self.model = self.sb3_class("MlpPolicy", self.env, verbose=0, n_steps=30*90*3, batch_size=128, ent_coef=0.01)
-            del self.env
-        else:
-            self.model = self.sb3_class.load(self.file_path)
+#     def _initialize(self) -> None:
+#         if self.file_path is None:
+#             self.model = self.sb3_class("MlpPolicy", self.env, verbose=0, n_steps=30*90*3, batch_size=128, ent_coef=0.01)
+#             del self.env
+#         else:
+#             self.model = self.sb3_class.load(self.file_path)
 
-    def _gdown(self) -> str:
-        # Call gdown to your link
-        return
+#     def _gdown(self) -> str:
+#         # Call gdown to your link
+#         return
 
-    #def set_ignore_grad(self) -> None:
-        #self.model.set_ignore_act_grad(True)
+#     #def set_ignore_grad(self) -> None:
+#         #self.model.set_ignore_act_grad(True)
 
-    def predict(self, obs):
-        action, _ = self.model.predict(obs)
-        return action
+#     def predict(self, obs):
+#         action, _ = self.model.predict(obs)
+#         return action
 
-    def save(self, file_path: str) -> None:
-        self.model.save(file_path, include=['num_timesteps'])
+#     def save(self, file_path: str) -> None:
+#         self.model.save(file_path, include=['num_timesteps'])
 
-    def learn(self, env, total_timesteps, log_interval: int = 1, verbose=0):
-        self.model.set_env(env)
-        self.model.verbose = verbose
-        self.model.learn(
-            total_timesteps=total_timesteps,
-            log_interval=log_interval,
-        )
+#     def learn(self, env, total_timesteps, log_interval: int = 1, verbose=0):
+#         self.model.set_env(env)
+#         self.model.verbose = verbose
+#         self.model.learn(
+#             total_timesteps=total_timesteps,
+#             log_interval=log_interval,
+#         )
 
-class RecurrentPPOAgent(Agent):
-    '''
-    RecurrentPPOAgent:
-    - Defines an RL Agent that uses the Recurrent PPO (LSTM+PPO) algorithm
-    '''
-    def __init__(
-            self,
-            file_path: Optional[str] = None
-    ):
-        super().__init__(file_path)
-        self.lstm_states = None
-        self.episode_starts = np.ones((1,), dtype=bool)
+# class RecurrentPPOAgent(Agent):
+#     '''
+#     RecurrentPPOAgent:
+#     - Defines an RL Agent that uses the Recurrent PPO (LSTM+PPO) algorithm
+#     '''
+#     def __init__(
+#             self,
+#             file_path: Optional[str] = None
+#     ):
+#         super().__init__(file_path)
+#         self.lstm_states = None
+#         self.episode_starts = np.ones((1,), dtype=bool)
 
-    def _initialize(self) -> None:
-        if self.file_path is None:
-            policy_kwargs = {
-                'activation_fn': nn.ReLU,
-                'lstm_hidden_size': 512,
-                'net_arch': [dict(pi=[32, 32], vf=[32, 32])],
-                'shared_lstm': True,
-                'enable_critic_lstm': False,
-                'share_features_extractor': True,
+#     def _initialize(self) -> None:
+#         if self.file_path is None:
+#             policy_kwargs = {
+#                 'activation_fn': nn.ReLU,
+#                 'lstm_hidden_size': 512,
+#                 'net_arch': [dict(pi=[32, 32], vf=[32, 32])],
+#                 'shared_lstm': True,
+#                 'enable_critic_lstm': False,
+#                 'share_features_extractor': True,
 
-            }
-            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-            print(f"Using device: {device}")
-            self.model = RecurrentPPO("MlpLstmPolicy",
-                                      self.env,
-                                      verbose=0,
-                                      n_steps=30*90*20,
-                                      batch_size=16,
-                                      ent_coef=0.05,
-                                      policy_kwargs=policy_kwargs,
-                                      device=device)
-            del self.env
-        else:
-            self.model = RecurrentPPO.load(self.file_path)
+#             }
+#             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#             print(f"Using device: {device}")
+#             self.model = RecurrentPPO("MlpLstmPolicy",
+#                                       self.env,
+#                                       verbose=0,
+#                                       n_steps=30*90*20,
+#                                       batch_size=16,
+#                                       ent_coef=0.05,
+#                                       policy_kwargs=policy_kwargs,
+#                                       device=device)
+#             del self.env
+#         else:
+#             self.model = RecurrentPPO.load(self.file_path)
 
-    def reset(self) -> None:
-        self.episode_starts = True
+#     def reset(self) -> None:
+#         self.episode_starts = True
 
-    def predict(self, obs):
-        action, self.lstm_states = self.model.predict(obs, state=self.lstm_states, episode_start=self.episode_starts, deterministic=True)
-        if self.episode_starts: self.episode_starts = False
-        return action
+#     def predict(self, obs):
+#         action, self.lstm_states = self.model.predict(obs, state=self.lstm_states, episode_start=self.episode_starts, deterministic=True)
+#         if self.episode_starts: self.episode_starts = False
+#         return action
 
-    def save(self, file_path: str) -> None:
-        self.model.save(file_path)
+#     def save(self, file_path: str) -> None:
+#         self.model.save(file_path)
 
-    def learn(self, env, total_timesteps, log_interval: int = 2, verbose=0):
-        self.model.set_env(env)
-        self.model.verbose = verbose
-        self.model.learn(total_timesteps=total_timesteps, log_interval=log_interval)
+#     def learn(self, env, total_timesteps, log_interval: int = 2, verbose=0):
+#         self.model.set_env(env)
+#         self.model.verbose = verbose
+#         self.model.learn(total_timesteps=total_timesteps, log_interval=log_interval)
 
 class EasyHardCodedBot(Agent):
     '''
@@ -278,117 +278,120 @@ class UserInputAgent(Agent):
 
         return action
 
-class ClockworkAgent(Agent):
-    '''
-    ClockworkAgent:
-    - Defines an Agent that performs sequential steps of [duration, action]
-    '''
-    def __init__(
-            self,
-            action_sheet: Optional[List[Tuple[int, List[str]]]] = None,
-            *args,
-            **kwargs
-    ):
-        super().__init__(*args, **kwargs)
+# class ClockworkAgent(Agent):
+#     '''
+#     ClockworkAgent:
+#     - Defines an Agent that performs sequential steps of [duration, action]
+#     '''
+#     def __init__(
+#             self,
+#             action_sheet: Optional[List[Tuple[int, List[str]]]] = None,
+#             *args,
+#             **kwargs
+#     ):
+#         super().__init__(*args, **kwargs)
 
-        self.steps = 0
-        self.current_action_end = 0  # Tracks when the current action should stop
-        self.current_action_data = None  # Stores the active action
-        self.action_index = 0  # Index in the action sheet
+#         self.steps = 0
+#         self.current_action_end = 0  # Tracks when the current action should stop
+#         self.current_action_data = None  # Stores the active action
+#         self.action_index = 0  # Index in the action sheet
 
-        if action_sheet is None:
-            self.action_sheet = [
-                (10, ['a']),
-                (1, ['l']),
-                (20, ['a']),
-                (3, ['a', 'j']),
-                (15, ['space']),
-            ]
-        else:
-            self.action_sheet = action_sheet
+#         if action_sheet is None:
+#             self.action_sheet = [
+#                 (10, ['a']),
+#                 (1, ['l']),
+#                 (20, ['a']),
+#                 (3, ['a', 'j']),
+#                 (15, ['space']),
+#             ]
+#         else:
+#             self.action_sheet = action_sheet
 
-    def predict(self, obs):
-        """
-        Returns an action vector based on the predefined action sheet.
-        """
-        # Check if the current action has expired
-        if self.steps >= self.current_action_end and self.action_index < len(self.action_sheet):
-            hold_time, action_data = self.action_sheet[self.action_index]
-            self.current_action_data = action_data  # Store the action
-            self.current_action_end = self.steps + hold_time  # Set duration
-            self.action_index += 1  # Move to the next action
+#     def predict(self, obs):
+#         """
+#         Returns an action vector based on the predefined action sheet.
+#         """
+#         # Check if the current action has expired
+#         if self.steps >= self.current_action_end and self.action_index < len(self.action_sheet):
+#             hold_time, action_data = self.action_sheet[self.action_index]
+#             self.current_action_data = action_data  # Store the action
+#             self.current_action_end = self.steps + hold_time  # Set duration
+#             self.action_index += 1  # Move to the next action
 
-        # Apply the currently active action
-        action = self.act_helper.press_keys(self.current_action_data)
-        self.steps += 1  # Increment step counter
-        return action
+#         # Apply the currently active action
+#         action = self.act_helper.press_keys(self.current_action_data)
+#         self.steps += 1  # Increment step counter
+#         return action
 
 
 
-class MLPExtractor(BaseFeaturesExtractor):
-    '''
-    Class that defines an MLP Base Features Extractor
-    '''
-    def __init__(self, observation_space: gym.Space, features_dim: int = 64, hidden_dim: int = 64):
-        super(MLPExtractor, self).__init__(observation_space, features_dim)
+# class MLPExtractor(BaseFeaturesExtractor):
+#     '''
+#     Class that defines an MLP Base Features Extractor
+#     '''
+#     def __init__(self, observation_space: gym.Space, features_dim: int = 64, hidden_dim: int = 64):
+#         super(MLPExtractor, self).__init__(observation_space, features_dim)
         
-        self.model = MLPPolicy(
-            obs_dim=observation_space.shape[0], 
-            action_dim=10,
-            hidden_dim=hidden_dim,
-        )
+#         self.model = MLPPolicy(
+#             obs_dim=observation_space.shape[0], 
+#             action_dim=10,
+#             hidden_dim=hidden_dim,
+#         )
     
-    def forward(self, obs: torch.Tensor) -> torch.Tensor:
-        return self.model(obs)
+#     def forward(self, obs: torch.Tensor) -> torch.Tensor:
+#         return self.model(obs)
     
-    @classmethod
-    def get_policy_kwargs(cls, features_dim: int = 64, hidden_dim: int = 64) -> dict:
-        return dict(
-            features_extractor_class=cls,
-            features_extractor_kwargs=dict(features_dim=features_dim, hidden_dim=hidden_dim) #NOTE: features_dim = 10 to match action space output
-        )  
+#     @classmethod
+#     def get_policy_kwargs(cls, features_dim: int = 64, hidden_dim: int = 64) -> dict:
+#         return dict(
+#             features_extractor_class=cls,
+#             features_extractor_kwargs=dict(features_dim=features_dim, hidden_dim=hidden_dim) #NOTE: features_dim = 10 to match action space output
+#         )  
 
-class MLPPolicy(nn.Module):
-    def __init__(self, obs_dim: int = 64, action_dim: int = 10, hidden_dim: int = 64):
-        """
-        A 3-layer MLP policy:
-        obs -> Linear(hidden_dim) -> ReLU -> Linear(hidden_dim) -> ReLU -> Linear(action_dim)
-        """
-        super(MLPPolicy, self).__init__()
+# class MLPPolicy(nn.Module):
+#     def __init__(self, obs_dim: int = 64, action_dim: int = 10, hidden_dim: int = 64):
+#         """
+#         A 3-layer MLP policy:
+#         obs -> Linear(hidden_dim) -> ReLU -> Linear(hidden_dim) -> ReLU -> Linear(action_dim)
+#         """
+#         super(MLPPolicy, self).__init__()
 
-        # Input layer
-        self.fc1 = nn.Linear(obs_dim, hidden_dim, dtype=torch.float32)
-        # Hidden layer
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim, dtype=torch.float32)
-        # Output layer
-        self.fc3 = nn.Linear(hidden_dim, action_dim, dtype=torch.float32)
+#         # Input layer
+#         self.fc1 = nn.Linear(obs_dim, hidden_dim, dtype=torch.float32)
+#         # Hidden layer
+#         self.fc2 = nn.Linear(hidden_dim, hidden_dim, dtype=torch.float32)
+#         # Output layer
+#         self.fc3 = nn.Linear(hidden_dim, action_dim, dtype=torch.float32)
 
-    def forward(self, obs):
-        """
-        obs: [batch_size, obs_dim]
-        returns: [batch_size, action_dim]
-        """
-        x = F.relu(self.fc1(obs))
-        x = F.relu(self.fc2(x))
-        return self.fc3(x)
+#     def forward(self, obs):
+#         """
+#         obs: [batch_size, obs_dim]
+#         returns: [batch_size, action_dim]
+#         """
+#         x = F.relu(self.fc1(obs))
+#         x = F.relu(self.fc2(x))
+#         return self.fc3(x)
 
 
 
-class DiscreteToBinary10(gymnasium.ActionWrapper):
+class BoxToMultiBinary10(gym.ActionWrapper):
+    """
+    Expose MultiBinary(10) to the algo, while the underlying env still accepts Box(0,1, (10,))
+    with threshold 0.5. We feed exact 0/1 floats to avoid nondifferentiable, off-policy thresholds.
+    """
     def __init__(self, env):
         super().__init__(env)
-        # Expose a Discrete action space to the algorithm
-        self.action_space = spaces.Discrete(2 ** 10)
-    @staticmethod
-    def _int_to_bits10(act_idx: int) -> np.ndarray:
-        # [b9, b8, ..., b0] — match your env’s bit order as needed
-        bits = np.array([(act_idx >> i) & 1 for i in range(10)], dtype=np.float32)
-        return bits[::-1]  # reverse if your env expects MSB-first
+        self.action_space = spaces.MultiBinary(10)  # 10 buttons
 
-    def action(self, act_idx):
-        # Map Discrete -> original Box(10,)
-        return self._int_to_bits10(int(act_idx))
-  
+    def action(self, action: np.ndarray) -> np.ndarray:
+        # PPO will give 0/1 ints for MultiBinary; convert to float for the Box env
+        # No extra thresholding needed downstream.
+        return action.astype(np.float32)
+
+    def reverse_action(self, action):
+        # Not strictly needed, but keeps interface complete
+        return (action > 0.5).astype(np.int8)
+
 class MLPWithLayerNorm(BaseFeaturesExtractor):
     def __init__(self, observation_space:gym.Space, features_dim:int = 256):
         super().__init__(observation_space, features_dim)
@@ -409,14 +412,14 @@ class MLPWithLayerNorm(BaseFeaturesExtractor):
         return self.model(obs)
 
 class CustomAgent(Agent):
-    def __init__(self, sb3_class: Optional[Type[BaseAlgorithm]]=QRDQN, file_path: str = None, extractor: BaseFeaturesExtractor = None):
+    def __init__(self, sb3_class: Optional[Type[BaseAlgorithm]]=PPO, file_path: str = None, extractor: BaseFeaturesExtractor = None):
         self.sb3_class = sb3_class
         self.extractor = extractor
         super().__init__(file_path)
 
     
     def _initialize(self) -> None:
-        print("initializing QRDQN network: uwu")
+        print("initializing PPO network: uwu")
         print(type(self.env.action_space))
         if self.file_path is None:
             # Set device for GPU training
@@ -424,20 +427,22 @@ class CustomAgent(Agent):
             print(f"Using device: {device}")
             
             policy_kwargs=dict(
-                n_quantiles=50,
                 features_extractor_class=MLPWithLayerNorm,
                 features_extractor_kwargs=dict(features_dim=256)
             )
             self.model = self.sb3_class(
                 "MlpPolicy", 
                     self.env, 
-                    buffer_size=400_000,
-                    learning_starts=2_000,
-                    batch_size=256,
-                    gamma=0.99,
-                    train_freq=8,
-                    target_update_interval=8_000, #TODO: try with 4_000 if you see spikes later in training
-                    exploration_fraction=0.5, # TODO: EXPERIMENT: 0.5 - 0.2 
+                    n_steps=2048,          # rollout length per update
+                    batch_size=256,        # minibatch size
+                    n_epochs=10,           # updates per batch
+                    gamma=0.995,
+                    gae_lambda=0.95,
+                    clip_range=0.2,
+                    ent_coef=0.01,         # encourage button exploration
+                    vf_coef=0.5,
+                    max_grad_norm=0.5,
+                    learning_rate=3e-4,
                     verbose=0,
                     policy_kwargs=policy_kwargs,
                     device=device,  # Use GPU if available
@@ -454,15 +459,14 @@ class CustomAgent(Agent):
         #self.model.set_ignore_act_grad(True)
 
     def predict(self, obs):
-        act_idx, _ = self.model.predict(obs)
-        action = np.array([(act_idx >> i) & 1 for i in range(10)], dtype=np.float32)
-        return action[::-1]
+        act, _ = self.model.predict(obs)
+        return act.astype(np.float32)
 
     def save(self, file_path: str) -> None:
         self.model.save(file_path, include=['num_timesteps'])
 
     def learn(self, env, total_timesteps, log_interval: int = 1, verbose=0):
-        self.model.set_env(DiscreteToBinary10(env))
+        self.model.set_env(BoxToMultiBinary10(env))
         self.model.verbose = verbose
         self.model.learn(
             total_timesteps=total_timesteps,
@@ -542,7 +546,242 @@ def damage_interaction_reward(
 
 
 # In[ ]:
+def clip_reward(reward: float, min_val: float = -0.2, max_val: float = 0.2) -> float:
+    """
+    Clip per-step rewards to [-0.2, +0.2].
+    Terminal rewards are NOT clipped.
+    """
+    return max(min_val, min(max_val, reward))
 
+def phi_distance(p_x,p_y,o_x,o_y):
+    dx, dy = p_x - o_x, p_y - o_y
+    dist = (dx*dx + dy*dy) ** 0.5
+    return -dist
+
+def head_to_opponent(
+    env: WarehouseBrawl,
+) -> float:
+    player = env.objects['player']
+    opponent = env.objects['opponent']
+    currDist = phi_distance(player.body.position.x, player.body.position.y,opponent.body.position.x,opponent.body.position.y)
+    prevDist = phi_distance(player.prev_x, player.prev_y,opponent.prev_x,opponent.prev_y)
+
+    return  env.dt * clip_reward(currDist - prevDist,-1,1)
+
+def on_win_reward(env: WarehouseBrawl, agent: str) -> float:
+    #favouring early wins and penilizing early looses
+    multipier = max(100/ max(env.steps, 1),1)
+    if agent == 'player':
+        return multipier
+    else:
+        return -multipier
+
+def on_knockout_reward(env: WarehouseBrawl, agent: str) -> float:
+    """
+    Two separate events:
+    - You KO them: +50
+    - You get KO'd: -50
+    """
+    opponent = env.objects['opponent']
+    player = env.objects['player']
+    # This signal is emitted for the agent that got KO'd
+    # So 'player' means player got KO'd, opponent got KO'd means win
+    if agent == 'player':
+        if player.damage_taken_this_stock < 15:
+            return -1.5  # You just died??
+        else:
+            return -1.0
+    else:
+        if opponent.damage_taken_this_stock < 15:
+            return 0.7  # Opponent got KO'd, player wins - you didn't do anything
+        else:
+            return 1.0
+
+def on_equip_reward(env: WarehouseBrawl, agent: str) -> float:
+    """
+    Simple equip reward to prevent weapon camping.
+    No special bonuses for specific weapons.
+    """
+    if agent == "player":
+        # Just acknowledge weapon pickup, no special bonuses
+        player = env.objects["player"]
+        if player.weapon == "Hammer":
+            return 2.0
+        elif player.weapon == "Spear":
+            return 1.0
+    return 0.0
+
+def on_drop_reward(env: WarehouseBrawl, agent: str) -> float:
+    if agent == "player":
+        if env.objects["player"].weapon == "Punch":
+            return -1.0
+    return 0.0
+
+def on_combo_reward(env: WarehouseBrawl, agent: str) -> float:
+    """Reward per EXTRA hit after the first - prevents dwarfing KO credit"""
+    if agent == 'player':
+        return env.dt * 0.05  # Per extra hit, scaled by weight
+    else:
+        return env.dt * -0.05
+
+def whiff_punishment_reward(env: WarehouseBrawl) -> float:
+    """
+    STRONG penalties for whiffing attacks, especially when far from opponent.
+    Stops spam attacking the air.
+    """
+    player = env.objects["player"]
+    opponent = env.objects["opponent"]
+    
+    # Calculate distance
+    dx = player.body.position.x - opponent.body.position.x
+    dy = player.body.position.y - opponent.body.position.y
+    distance = (dx**2 + dy**2)**0.5
+    vx,vy = player.body.velocity.x-opponent.body.velocity.x, player.body.velocity.y-opponent.body.velocity.y
+
+    closing = (dx*vx+dy*vy) < 0
+    
+    far = min(distance/6.0,1.5)
+    attacking = hasattr(player.state, 'move_type') and player.state.move_type not in [MoveType.NONE,MoveType.RECOVERY] 
+    whiff = 0
+    if not whiff or not attacking:
+        return 0.0
+    
+    not_closing = 1.0 if not closing else 0.4
+    return clip_reward(-0.03 * env.dt * far * not_closing,-1,1)
+
+def advantage_state_reward(env: WarehouseBrawl) -> float:
+    """
+    Rewards opponent in hitstun + tiny per-frame hitstun reward.
+    Encourages sustained pressure.
+    """
+    player = env.objects["player"]
+    opponent = env.objects["opponent"]
+    
+    # Base reward for having opponent stunned
+    # Check if opponent is in StunState
+    if isinstance(opponent.state, StunState):
+        base_reward = 0.05 * env.dt  # Advantage state reward
+        hitstun_bonus = (0.02 * env.dt) if opponent.damage_taken_this_frame else 0 # Tiny per-frame hitstun reward
+        return base_reward + hitstun_bonus
+    
+    return 0.0
+
+def proximity_to_opponent_reward(env: WarehouseBrawl) -> float:
+    """
+    Rewards getting close to opponent - encourages chasing and engagement.
+    Reward increases as distance decreases.
+    """
+    player: Player = env.objects["player"]
+    opponent: Player = env.objects["opponent"]
+    
+    # Calculate distance
+    dx = player.body.position.x - opponent.body.position.x
+    dy = player.body.position.y - opponent.body.position.y
+    distance = (dx**2 + dy**2)**0.5
+    
+    max_distance = 15.0  # Maximum arena distance
+    
+    # Don't reward if player is stunned
+    if isinstance(player.state, StunState):
+        return 0.0
+    
+    # Reward for being close - closer = more reward
+    # Inverse relationship: closer gets more reward
+    if distance < max_distance:
+        reward = (max_distance - distance) / max_distance
+        return reward * 0.005  # INCREASED per-frame reward
+    
+    return 0.0
+
+def weapon_stability_reward(env: WarehouseBrawl) -> float:
+    """
+    Small constant reward for having any weapon (discourages constant switching).
+    """
+    player: Player = env.objects["player"]
+    
+    # Reward for having a weapon, slightly more for better weapons
+    if player.weapon in ["Hammer", "Spear"]:
+        return env.dt * 0.001
+    else:
+        return 0.0
+    
+def jumping_on_middle(env:WarehouseBrawl):
+    """
+    reward for getting on middle
+    """
+    player: Player = env.objects['player']
+    platform = env.objects['platform1']
+
+    edge_x = 1  # Platform half-width (from environment code)
+    # Get platform position directly from environment object
+    platform_x = platform.body.position.x
+    platform_y = platform.body.position.y
+
+    x = player.body.position.x
+    y = player.body.position.y
+    
+    if platform_x - edge_x < x < platform_x + edge_x and platform_y > y:
+        return 0.5 * env.dt
+    return 0.0
+
+def no_input_penalty(env: WarehouseBrawl) -> float:
+    """
+    Punish doing nothing at all this frame
+    """
+    player = env.objects["player"]
+    x = player.body.positoin.x
+    y = player.body.positoin.y
+    prev_x = player.prev_x
+    prev_y = player.prev_y
+    dist = (x-prev_x)**2 + (y-prev_y) ** 2
+    return clip_reward(env.dt * (dist/2 if dist > 1.0 else -1.0),-0.5,0.5)
+
+
+
+
+
+def edge_to_ko_bonus(env: WarehouseBrawl, agent: str) -> float:
+    """Bonus for converting edge hits into KOs within 2 seconds"""
+    if agent != 'player':
+        return 0.0
+    
+    player = env.objects["player"]
+    opponent = env.objects["opponent"]
+    
+    # Check if opponent was near edge (within 3 units) when KO'd
+    edge_x = env.stage_width_tiles // 2
+    opponent_dist_to_left = abs(opponent.body.position.x + edge_x)
+    opponent_dist_to_right = abs(opponent.body.position.x - edge_x)
+    min_edge_dist = min(opponent_dist_to_left, opponent_dist_to_right)
+    
+    # Bonus if opponent was near edge when KO'd
+    if min_edge_dist < 3.0:
+        return 8.0
+    
+    return 0.0
+
+def head_to_middle_reward(
+    env: WarehouseBrawl,
+) -> float:
+    """
+    Applies a penalty for every time frame player surpases a certain height threshold in the environment.
+
+    Args:
+        env (WarehouseBrawl): The game environment.
+        zone_penalty (int): The penalty applied when the player is in the danger zone.
+        zone_height (float): The height threshold defining the danger zone.
+
+    Returns:
+        float: The computed penalty as a tensor.
+    """
+    # Get player object from the environment
+    player: Player = env.objects["player"]
+
+    # Apply penalty if the player is in the danger zone
+    multiplier = -1 if player.body.position.x > 0 else 1
+    reward = multiplier * (player.body.position.x - player.prev_x)
+
+    return reward
 
 def danger_zone_reward(
     env: WarehouseBrawl,
@@ -591,43 +830,6 @@ def in_state_reward(
 
     return reward * env.dt
 
-def head_to_middle_reward(
-    env: WarehouseBrawl,
-) -> float:
-    """
-    Applies a penalty for every time frame player surpases a certain height threshold in the environment.
-
-    Args:
-        env (WarehouseBrawl): The game environment.
-        zone_penalty (int): The penalty applied when the player is in the danger zone.
-        zone_height (float): The height threshold defining the danger zone.
-
-    Returns:
-        float: The computed penalty as a tensor.
-    """
-    # Get player object from the environment
-    player: Player = env.objects["player"]
-
-    # Apply penalty if the player is in the danger zone
-    multiplier = -1 if player.body.position.x > 0 else 1
-    reward = multiplier * (player.body.position.x - player.prev_x)
-
-    return reward
-
-def head_to_opponent(
-    env: WarehouseBrawl,
-) -> float:
-
-    # Get player object from the environment
-    player: Player = env.objects["player"]
-    opponent: Player = env.objects["opponent"]
-
-    # Apply penalty if the player is in the danger zone
-    multiplier = -1 if player.body.position.x > opponent.body.position.x else 1
-    reward = clip_reward(multiplier * env.dt * (player.body.position.x - player.prev_x),-1,1)
-
-    return reward
-
 def holding_more_than_3_keys(
     env: WarehouseBrawl,
 ) -> float:
@@ -641,119 +843,32 @@ def holding_more_than_3_keys(
         return env.dt
     return 0
 
-def on_win_reward(env: WarehouseBrawl, agent: str) -> float:
-    #favouring early wins and penilizing early looses
-    multipier = 100/env.steps if env.steps > 1 else 1
-    if agent == 'player':
-        return clip_reward(1.0 * multipier, 0.5,2.5)
-    else:
-        return clip_reward(-1.0 * multipier, 0.5,2.5)
+def min_speed_reward(env: WarehouseBrawl) -> float:
+    """
+    Small bonus for having some horizontal speed, 0 when already fast
+    """
+    vx = abs(env.objects["player"].body.velocity.x)
+    return min(vx, 1.0) * 0.02 * env.dt
 
-def on_knockout_reward(env: WarehouseBrawl, agent: str) -> float:
+def idle_penalty(env: WarehouseBrawl) -> float:
     """
-    Two separate events:
-    - You KO them: +50
-    - You get KO'd: -50
+    Penalize player for being idle (low velocity)
     """
-    oponent = env.objects['opponent']
-    player = env.objects['player']
-    # This signal is emitted for the agent that got KO'd
-    # So 'player' means player got KO'd, opponent got KO'd means win
-    if agent == 'player':
-        if player.damage_taken_this_stock < 15:
-            return -1.5  # You just died??
-        else:
-            return -1.0
-    else:
-        if oponent.damage_taken_this_stock < 15:
-            return 0.7  # Opponent got KO'd, player wins - you didn't do anything
-        else:
-            return 1.0
-def on_equip_reward(env: WarehouseBrawl, agent: str) -> float:
-    """
-    Simple equip reward to prevent weapon camping.
-    No special bonuses for specific weapons.
-    """
-    if agent == "player":
-        # Just acknowledge weapon pickup, no special bonuses
-        player = env.objects["player"]
-        if player.weapon == "Hammer":
-            return 2.0
-        elif player.weapon == "Spear":
-            return 1.0
+    p = env.objects["player"]
+    vx, vy = p.body.velocity.x, p.body.velocity.y
+    if abs(vx) < 0.5 and abs(vy) < 0.5:
+        return -0.1 * env.dt
     return 0.0
 
-def on_drop_reward(env: WarehouseBrawl, agent: str) -> float:
-    if agent == "player":
-        if env.objects["player"].weapon == "Punch":
-            return -1.0
-    return 0.0
-
-def on_combo_reward(env: WarehouseBrawl, agent: str) -> float:
-    """Reward per EXTRA hit after the first - prevents dwarfing KO credit"""
-    if agent == 'player':
-        damage_dealt = env.objects["opponent"].damage_taken_this_frame
-        # Pay per extra hit (first hit gets no combo bonus, subsequent hits do)
-        # This encourages extending but doesn't overshadow KOs
-        return 0.05  # Per extra hit, scaled by weight
-    else:
-        return -0.05
-
-def edge_to_ko_bonus(env: WarehouseBrawl, agent: str) -> float:
-    """Bonus for converting edge hits into KOs within 2 seconds"""
-    if agent != 'player':
-        return 0.0
-    
-    player = env.objects["player"]
-    opponent = env.objects["opponent"]
-    
-    # Check if opponent was near edge (within 3 units) when KO'd
-    edge_x = env.stage_width_tiles // 2
-    opponent_dist_to_left = abs(opponent.body.position.x + edge_x)
-    opponent_dist_to_right = abs(opponent.body.position.x - edge_x)
-    min_edge_dist = min(opponent_dist_to_left, opponent_dist_to_right)
-    
-    # Bonus if opponent was near edge when KO'd
-    if min_edge_dist < 3.0:
-        return 8.0
-    
-    return 0.0
-
-def whiff_punishment_reward(env: WarehouseBrawl) -> float:
+def forward_progress_reward(env: WarehouseBrawl) -> float:
     """
-    STRONG penalties for whiffing attacks, especially when far from opponent.
-    Stops spam attacking the air.
+    Always pay for moving toward opponent this frame
     """
-    player = env.objects["player"]
-    opponent = env.objects["opponent"]
-    
-    # Calculate distance
-    dx = player.body.position.x - opponent.body.position.x
-    dy = player.body.position.y - opponent.body.position.y
-    distance = (dx**2 + dy**2)**0.5
-    
-    threat_range = 3.0
-    far_range = 5.0
-    
-    # Check if player is attacking
-    if hasattr(player.state, 'move_type') and player.state.move_type not in [MoveType.NONE,MoveType.RECOVERY] and opponent.damage_taken_this_frame == 0:
-        # STRONGER penalty if attacking when opponent is far away
-        if distance > far_range:
-            return -0.15  # Heavy penalty for attacking air when far
-        elif distance > threat_range:
-            return -0.08  # Medium penalty for attacking outside threat range
-        elif distance < threat_range:
-            # Classify as heavy or light whiff in range
-            is_heavy = player.state.move_type in [
-                MoveType.NSIG, MoveType.DSIG, MoveType.SSIG, MoveType.GROUNDPOUND
-            ]
-            
-            if is_heavy:
-                return -0.05  # INCREASED: Heavy whiff in range
-            else:
-                return -0.01  # INCREASED: Light whiff in range
-    
-    return 0.0
+    p = env.objects["player"]
+    o = env.objects["opponent"]
+    dx = p.body.position.x - p.prev_x
+    sign = 1 if p.body.position.x < o.body.position.x else -1
+    return sign * dx  # positive if moved toward, negative if moved away
 
 def time_pressure_reward(env: WarehouseBrawl) -> float:
     """
@@ -782,57 +897,6 @@ def retreat_penalty(env: WarehouseBrawl) -> float:
         if not opp_in_bad_position:
             # This is a retreat, apply penalty
             return -0.01 * env.dt  # Grace window handled by small penalty
-    
-    return 0.0
-
-def advantage_state_reward(env: WarehouseBrawl) -> float:
-    """
-    Rewards opponent in hitstun + tiny per-frame hitstun reward.
-    Encourages sustained pressure.
-    """
-    player = env.objects["player"]
-    opponent = env.objects["opponent"]
-    
-    # Base reward for having opponent stunned
-    # Check if opponent is in StunState
-    if isinstance(opponent.state, StunState):
-        base_reward = 0.05 * env.dt  # Advantage state reward
-        hitstun_bonus = (0.02 * env.dt) if opponent.damage_taken_this_frame else 0 # Tiny per-frame hitstun reward
-        return base_reward + hitstun_bonus
-    
-    return 0.0
-
-def clip_reward(reward: float, min_val: float = -0.2, max_val: float = 0.2) -> float:
-    """
-    Clip per-step rewards to [-0.2, +0.2].
-    Terminal rewards are NOT clipped.
-    """
-    return max(min_val, min(max_val, reward))
-
-def proximity_to_opponent_reward(env: WarehouseBrawl) -> float:
-    """
-    Rewards getting close to opponent - encourages chasing and engagement.
-    Reward increases as distance decreases.
-    """
-    player: Player = env.objects["player"]
-    opponent: Player = env.objects["opponent"]
-    
-    # Calculate distance
-    dx = player.body.position.x - opponent.body.position.x
-    dy = player.body.position.y - opponent.body.position.y
-    distance = (dx**2 + dy**2)**0.5
-    
-    max_distance = 15.0  # Maximum arena distance
-    
-    # Don't reward if player is stunned
-    if isinstance(player.state, StunState):
-        return 0.0
-    
-    # Reward for being close - closer = more reward
-    # Inverse relationship: closer gets more reward
-    if distance < max_distance:
-        reward = (max_distance - distance) / max_distance
-        return reward * 0.005  # INCREASED per-frame reward
     
     return 0.0
 
@@ -944,39 +1008,6 @@ def survival_bonus(env: WarehouseBrawl) -> float:
     
     return 0.0
 
-def weapon_stability_reward(env: WarehouseBrawl) -> float:
-    """
-    Small constant reward for having any weapon (discourages constant switching).
-    """
-    player: Player = env.objects["player"]
-    
-    # Reward for having a weapon, slightly more for better weapons
-    if player.weapon == "Hammer":
-        return 0.002
-    elif player.weapon == "Spear":
-        return 0.001
-    else:
-        return 0.0
-    
-def jumping_on_middle(env:WarehouseBrawl):
-    """
-    reward for getting on middle
-    """
-    player: Player = env.objects['player']
-    platform = env.objects['platform1']
-
-    edge_x = 1  # Platform half-width (from environment code)
-    # Get platform position directly from environment object
-    platform_x = platform.body.position.x
-    platform_y = platform.body.position.y
-
-    x = player.body.position.x
-    y = player.body.position.y
-    
-    if platform_x - edge_x < x < platform_x + edge_x and platform_y > y:
-        return 2.0 * env.dt
-    return 0.0
-
 def whichPlatform(x,y,positionMap):
     """
     1 -> ground1
@@ -1031,6 +1062,7 @@ def gen_reward_manager(numCheckpoint:int):
             'proximity_to_opponent_reward': 2.0,
             'head_to_opponent': 4.0,
             'jumping_on_middle': 2.0,
+            'no_input_penalty': 2.0,
             'on_win_reward': 100,
             'on_knockout_reward': 20,
             'on_combo_reward': 0.0,
@@ -1040,11 +1072,12 @@ def gen_reward_manager(numCheckpoint:int):
         1: {
             'damage_interaction_reward': 15.0,
             'advantage_state_reward': 0.0,
-            'whiff_punishment_reward': 4.0,
+            'whiff_punishment_reward': 2.0,
             'weapon_stability_reward': 0.0,
             'proximity_to_opponent_reward': 2.0,
             'head_to_opponent': 4.0,
             'jumping_on_middle': 1.0,
+            'no_input_penalty': 0.01,
             'on_win_reward': 100,
             'on_knockout_reward': 80,
             'on_combo_reward': 0.0,
@@ -1091,13 +1124,13 @@ def gen_reward_manager(numCheckpoint:int):
         
         # Whiff punishment
         'whiff_punishment_reward': RewTerm(func=whiff_punishment_reward, weight=currCheckPoint.get('whiff_punishment_reward', 0.0)), #checkpoint 1 #checkpoint 3: reduce to 1.0
-        
         'weapon_stability_reward': RewTerm(func=weapon_stability_reward, weight=currCheckPoint.get('weapon_stability_reward', 0.0)), #checkpoint 2
         
         # encourage running at opponent especially for start to get more useful data
         'proximity_to_opponent_reward': RewTerm(func=proximity_to_opponent_reward, weight=currCheckPoint['proximity_to_opponent_reward']), 
         'head_to_opponent': RewTerm(func=head_to_opponent, weight=currCheckPoint['head_to_opponent']), 
         'jumping_on_middle': RewTerm(func=jumping_on_middle, weight=currCheckPoint['jumping_on_middle']), # checkpoint-driven weights
+        'no_input_penalty': RewTerm(func=no_input_penalty, weight=currCheckPoint.get('no_input_penalty',0.0))
         
         # Keep these disabled/zero
         # 'stage_control': RewTerm(func=stage_control, weight=currCheckPoint.get('stage_control', 0.0))
@@ -1142,7 +1175,7 @@ if __name__ == '__main__':
     # my_agent = CustomAgent(sb3_class=QRDQN, extractor=MLPExtractor)
     
     # OR: Continue from checkpoint (only if you want to try adapting old behavior):
-    my_agent = CustomAgent(sb3_class=QRDQN, file_path='checkpoints/num2/rl_model_800000_steps.zip', extractor=MLPExtractor)
+    my_agent = CustomAgent(sb3_class=PPO, file_path='checkpoints/num2/rl_model_800000_steps.zip', extractor=MLPWithLayerNorm)
 
     # Start here if you want to train from scratch. e.g:
     #my_agent = RecurrentPPOAgent()
@@ -1159,37 +1192,39 @@ if __name__ == '__main__':
     selfplay_random = SelfPlayRandom(
         partial(type(my_agent))
     )
-
+    
     # Set save settings here:
     save_handler = SaveHandler(
         agent=my_agent, # Agent to save
         save_freq=50_000, # Save frequency - more frequent to catch good models
         max_saved=40, # Maximum number of saved models
         save_path='checkpoints', # Save path
-        run_name='zzzzzzzzzzzzz',  # Fresh training with aggressive chase + no whiffs
+        run_name='experiment_run_PPO_IM_DUMB_AF',  # Fresh training with aggressive chase + no whiffs
         mode=SaveHandlerMode.RESUME  # Start completely fresh
     )
 
     # Set opponent settings here:
     opponent_spec0 = {
-                    'self_play': (2.5, selfplay_handler),
-                    'self_play_random': (2.5,selfplay_random),
-                    'constant_agent': (5, partial(ConstantAgent)),
+                    'self_play': (3, selfplay_handler),
+                    'self_play_random': (0,selfplay_random),
+                    'constant_agent': (7, partial(ConstantAgent)),
                     'easy_hard_coded_bot': (0, partial(EasyHardCodedBot)),
                     'hard_hard_coded_bot': (0,partial(HardHardCodedBot))
                 }
     
     opponent_spec1 = {
         'self_play': (4, selfplay_handler),
-        'constant_agent': (2, partial(ConstantAgent)),
-        'easy_hard_coded_bot': (4, partial(EasyHardCodedBot)),
+        'self_play_random': (2,selfplay_random),
+        'constant_agent': (1, partial(ConstantAgent)),
+        'easy_hard_coded_bot': (3, partial(EasyHardCodedBot)),
         'hard_hard_coded_bot': (0,partial(HardHardCodedBot))
     }   
 
     opponent_spec2 = {
-        'self_play': (6, selfplay_handler),
+        'self_play': (5, selfplay_handler),
+        'self_play_random': (2,selfplay_random),
         'constant_agent': (0, partial(ConstantAgent)),
-        'easy_hard_coded_bot': (3, partial(EasyHardCodedBot)),
+        'easy_hard_coded_bot': (2, partial(EasyHardCodedBot)),
         'hard_hard_coded_bot': (1,partial(HardHardCodedBot))
     }
 
