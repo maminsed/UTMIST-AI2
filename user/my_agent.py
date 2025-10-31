@@ -49,6 +49,19 @@ class SubmittedAgent(Agent):
         action = self.act_helper.zeros()
         facing = self.obs_helper.get_section(obs, 'player_facing')
 
+        spawners = self.env.get_spawner_info()
+
+        # pick up a weapon if near
+        if self.obs_helper.get_section(obs, 'player_weapon_type') == 0:
+            for w in spawners:
+                if euclid(pos, w[1]) < 3:
+                    action = self.act_helper.press_keys(['h'], action)
+
+        # emote for fun
+        if self.time == 10 or self.obs_helper.get_section(obs, 'opponent_stocks') == 0:
+            action = self.act_helper.press_keys(['g'], action)
+            return action
+
         if self.prev_pos is not None:
             self.down = (pos[1] - self.prev_pos[1]) > 0
         self.prev_pos = pos
@@ -69,12 +82,6 @@ class SubmittedAgent(Agent):
 
         # Jump if falling
         if self.down or self.obs_helper.get_section(obs, 'player_grounded') == 1:
-            '''
-            if self.obs_helper.get_section(obs, "player_recoveries_left") > 0:
-                action = self.act_helper.press_keys(['k'], action)
-            else:
-                action = self.act_helper.press_keys(['space'], action)
-            '''
             if self.time % 10 == 0:
                 action = self.act_helper.press_keys(['space'], action)
 
@@ -87,6 +94,10 @@ class SubmittedAgent(Agent):
         
                 
         # Attack if near
-        if not self.recover and (pos[0] - opp_pos[0])**2 + (pos[1] - opp_pos[1])**2 < 4.0:
+        if not self.recover and euclid(pos, opp_pos) < 4.0:
             action = self.act_helper.press_keys(['j'], action)
+
         return action
+
+def euclid (a, b):
+    return (a[0] - b[0])**2 + (a[1] - b[1])**2
