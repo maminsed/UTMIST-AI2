@@ -885,9 +885,11 @@ def jumping_on_middle(env:WarehouseBrawl):
     edge_x = 2 // 2
 
     x = player.body.position.x
+    y = player.body.position.y
     
-    if middle - edge_x < x < middle + edge_x and env.dt:
+    if middle[0] - edge_x < x < middle[0] + edge_x and middle[1] < y:
         return 2.0
+    return 0.0
 
 '''
 Add your dictionary of RewardFunctions here using RewTerms
