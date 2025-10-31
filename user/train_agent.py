@@ -288,6 +288,7 @@ class MLPExtractor(BaseFeaturesExtractor):
     '''
     def __init__(self, observation_space: gym.Space, features_dim: int = 64, hidden_dim: int = 64):
         super(MLPExtractor, self).__init__(observation_space, features_dim)
+        self.action_space = spaces.Discrete(2**10)
         self.model = MLPPolicy(
             obs_dim=observation_space.shape[0], 
             action_dim=10,
@@ -305,7 +306,7 @@ class MLPExtractor(BaseFeaturesExtractor):
         )
     
 class MLPWithLayerNorm(BaseFeaturesExtractor):
-    def __init__(self, observation_space:gym.Space, features_dim:int = 64):
+    def __init__(self, observation_space:gym.Space, features_dim:int = 256):
         super().__init__(observation_space, features_dim)
         in_dim = observation_space.shape[0]
         #TODO: EXPERIMENT:
@@ -330,11 +331,11 @@ class CustomAgent(Agent):
         self.extractor = extractor
         super().__init__(file_path)
         print(self.env.action_space)
-        print(type(self.env.action_space))
 
     
     def _initialize(self) -> None:
         print("initializing QRDQN network: uwu")
+        print(type(self.env.action_space))
         if self.file_path is None:
             policy_kwargs=dict(
                 n_quantiles=50,
@@ -366,8 +367,9 @@ class CustomAgent(Agent):
         #self.model.set_ignore_act_grad(True)
 
     def predict(self, obs):
-        action, _ = self.model.predict(obs)
-        return action
+        act_idx, _ = self.model.predict(obs)
+        action = np.array([(act_idx >> i) & 1 for i in range(10)], dtype=np.float32)
+        return action[::-1]
 
     def save(self, file_path: str) -> None:
         self.model.save(file_path, include=['num_timesteps'])
