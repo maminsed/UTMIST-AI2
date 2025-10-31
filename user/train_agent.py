@@ -1295,7 +1295,7 @@ if __name__ == '__main__':
                 train_logging=TrainLogging.PLOT
             )
     elif state == 'rightnow':
-        RUN = 1
+        RUN = 2
         reward_manager = gen_reward_manager(RUN)
 
         opponent_cfg = OpponentsCfg(opponents=opponent_specDict[RUN])
