@@ -390,7 +390,7 @@ class CustomAgent(Agent):
         self.model.save(file_path, include=['num_timesteps'])
 
     def learn(self, env, total_timesteps, log_interval: int = 1, verbose=0):
-        self.model.set_env(env)
+        self.model.set_env(DiscreteToBinary10(env))
         self.model.verbose = verbose
         self.model.learn(
             total_timesteps=total_timesteps,
@@ -880,14 +880,19 @@ def jumping_on_middle(env:WarehouseBrawl):
     reward for getting on middle
     """
     player: Player = env.objects['player']
-    grounded = env.obs_helper('player_grounded')
-    middle = env.obs_helper('player_moving_platform_pos')
-    edge_x = 2 // 2
-
-    x = player.body.position.x
+    platform = env.objects['platform1']
     
-    if middle - edge_x < x < middle + edge_x and env.dt:
-        return 2.0 * env.dt
+    # Check if player is on the moving platform
+    if player.is_on_floor() and player.body.position.y <= platform.body.position.y + 0.1:
+        # Check if player is near the platform's x position
+        platform_x = platform.body.position.x
+        edge_x = 1.25  # Platform half-width
+        x = player.body.position.x
+        
+        if platform_x - edge_x < x < platform_x + edge_x:
+            return 2.0 * env.dt
+    
+    return 0.0
 
 '''
 Add your dictionary of RewardFunctions here using RewTerms
