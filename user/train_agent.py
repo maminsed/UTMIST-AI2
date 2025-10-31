@@ -350,7 +350,6 @@ class CustomAgent(Agent):
     def _initialize(self) -> None:
         print("initializing QRDQN network: uwu")
         print(type(self.env.action_space))
-        self.env = DiscreteToBinary10(self.env)
         if self.file_path is None:
             policy_kwargs=dict(
                 n_quantiles=50,
@@ -880,14 +879,13 @@ def jumping_on_middle(env:WarehouseBrawl):
     reward for getting on middle
     """
     player: Player = env.objects['player']
-    grounded = env.obs_helper('player_grounded')
     middle = env.obs_helper('player_moving_platform_pos')
     edge_x = 2 // 2
 
     x = player.body.position.x
     y = player.body.position.y
     
-    if middle[0] - edge_x < x < middle[0] + edge_x and middle[1] < y:
+    if middle[0] - edge_x < x < middle[0] + edge_x and middle[1] > y:
         return 2.0
     return 0.0
 
