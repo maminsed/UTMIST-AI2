@@ -624,7 +624,7 @@ def head_to_opponent(
 
     # Apply penalty if the player is in the danger zone
     multiplier = -1 if player.body.position.x > opponent.body.position.x else 1
-    reward = clip_reward(multiplier * (player.body.position.x - player.prev_x),-1,1)
+    reward = clip_reward(multiplier * env.dt * (player.body.position.x - player.prev_x),-1,1)
 
     return reward
 
@@ -963,14 +963,18 @@ def jumping_on_middle(env:WarehouseBrawl):
     reward for getting on middle
     """
     player: Player = env.objects['player']
-    middle = env.obs_helper('player_moving_platform_pos')
-    edge_x = 2 // 2
+    platform = env.objects['platform1']
+
+    edge_x = 1  # Platform half-width (from environment code)
+    # Get platform position directly from environment object
+    platform_x = platform.body.position.x
+    platform_y = platform.body.position.y
 
     x = player.body.position.x
     y = player.body.position.y
     
-    if middle[0] - edge_x < x < middle[0] + edge_x and middle[1] > y:
-        return 2.0
+    if platform_x - edge_x < x < platform_x + edge_x and platform_y > y:
+        return 2.0 * env.dt
     return 0.0
 
 def whichPlatform(x,y,positionMap):
@@ -1020,19 +1024,33 @@ Add your dictionary of RewardFunctions here using RewTerms
 def gen_reward_manager(numCheckpoint:int):
     checkPointDict = {
         0: {
-            'damage_interaction_reward': 10.0,
-            'advantage_state_reward': 0.0,
-            'whiff_punishment_reward': 0.0,
-            'weapon_stability_reward': 0.0,
-            'proximity_to_opponent_reward': 2.0,
-            'head_to_opponent': 4.0,
-            'jumping_on_middle': 2.0,
-            'on_win_reward': 100,
-            'on_knockout_reward': 20,
-            'on_combo_reward': 0.0,
-            'on_equip_reward': 0.0,
-            'on_drop_reward': 0.0
+            'damage_interaction_reward': 1,
+            'advantage_state_reward': 1,
+            'whiff_punishment_reward': 1,
+            'weapon_stability_reward': 1,
+            'proximity_to_opponent_reward': 1,
+            'head_to_opponent': 1,
+            'jumping_on_middle': 1,
+            'on_win_reward': 1,
+            'on_knockout_reward': 1,
+            'on_combo_reward': 1,
+            'on_equip_reward': 1,
+            'on_drop_reward': 1
         },
+        # 0: {
+        #     'damage_interaction_reward': 10.0,
+        #     'advantage_state_reward': 0.0,
+        #     'whiff_punishment_reward': 0.0,
+        #     'weapon_stability_reward': 0.0,
+        #     'proximity_to_opponent_reward': 2.0,
+        #     'head_to_opponent': 4.0,
+        #     'jumping_on_middle': 2.0,
+        #     'on_win_reward': 100,
+        #     'on_knockout_reward': 20,
+        #     'on_combo_reward': 0.0,
+        #     'on_equip_reward': 0.0,
+        #     'on_drop_reward': 0.0
+        # },
         1: {
             'damage_interaction_reward': 15.0,
             'advantage_state_reward': 0.0,
@@ -1162,7 +1180,7 @@ if __name__ == '__main__':
         save_freq=50_000, # Save frequency - more frequent to catch good models
         max_saved=40, # Maximum number of saved models
         save_path='checkpoints', # Save path
-        run_name='amin',  # Fresh training with aggressive chase + no whiffs
+        run_name='zzzzzzzzzzzzz',  # Fresh training with aggressive chase + no whiffs
         mode=SaveHandlerMode.RESUME  # Start completely fresh
     )
 
