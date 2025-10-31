@@ -1013,50 +1013,110 @@ def stage_control(env:WarehouseBrawl):
 '''
 Add your dictionary of RewardFunctions here using RewTerms
 '''
-def gen_reward_manager():
+def gen_reward_manager(numCheckpoint:int):
+    checkPointDict = {
+        0: {
+            'damage_interaction_reward': 10.0,
+            'advantage_state_reward': 0.0,
+            'whiff_punishment_reward': 0.0,
+            'weapon_stability_reward': 0.0,
+            'proximity_to_opponent_reward': 2.0,
+            'head_to_opponent': 4.0,
+            'jumping_on_middle': 2.0,
+            'on_win_reward': 100,
+            'on_knockout_reward': 20,
+            'on_combo_reward': 0.0,
+            'on_equip_reward': 0.0,
+            'on_drop_reward': 0.0
+        },
+        1: {
+            'damage_interaction_reward': 15.0,
+            'advantage_state_reward': 0.0,
+            'whiff_punishment_reward': 4.0,
+            'weapon_stability_reward': 0.0,
+            'proximity_to_opponent_reward': 2.0,
+            'head_to_opponent': 4.0,
+            'jumping_on_middle': 1.0,
+            'on_win_reward': 100,
+            'on_knockout_reward': 80,
+            'on_combo_reward': 0.0,
+            'on_equip_reward': 0.0,
+            'on_drop_reward': 0.0
+        }, 
+        2: {
+            'damage_interaction_reward': 15.0,
+            'advantage_state_reward': 0.0,
+            'whiff_punishment_reward': 4.0,
+            'weapon_stability_reward': 5.0,
+            'proximity_to_opponent_reward': 0.5,
+            'head_to_opponent': 4.0,
+            'jumping_on_middle': 0.5,
+            'on_win_reward': 100,
+            'on_knockout_reward': 80,
+            'on_combo_reward': 0.0,
+            'on_equip_reward': 0.1,
+            'on_drop_reward': 0.001
+        },
+        3: {
+            'damage_interaction_reward': 15.0,
+            'advantage_state_reward': 2.0,
+            'whiff_punishment_reward': 1.0,
+            'weapon_stability_reward': 5.0,
+            'proximity_to_opponent_reward': 0.5,
+            'head_to_opponent': 4.0,
+            'jumping_on_middle': 0.01,
+            'on_win_reward': 100,
+            'on_knockout_reward': 80,
+            'on_combo_reward': 0.0,
+            'on_equip_reward': 0.1,
+            'on_drop_reward': 0.0099
+        }
+    }
+
+    currCheckPoint = checkPointDict[numCheckpoint]
+
     reward_functions = {
-        'damage_interaction_reward': RewTerm(func=damage_interaction_reward, weight=10.0, params={'mode': RewardMode.SYMMETRIC}), #checkpoint 1 increase to 15
+        'damage_interaction_reward': RewTerm(func=damage_interaction_reward, weight=currCheckPoint['damage_interaction_reward'], params={'mode': RewardMode.SYMMETRIC}), # checkpoint values from currCheckPoint
         
         # Advantage state reward - encourages pressure maintenance
-        # 'advantage_state_reward': RewTerm(func=advantage_state_reward, weight=2.0), #checkpoint 3
+        'advantage_state_reward': RewTerm(func=advantage_state_reward, weight=currCheckPoint.get('advantage_state_reward', 0.0)), #checkpoint 3
         
         # Whiff punishment
-        # 'whiff_punishment_reward': RewTerm(func=whiff_punishment_reward, weight=4.0), #checkpoint 1 #checkpoint 3: redue to 1.0
+        'whiff_punishment_reward': RewTerm(func=whiff_punishment_reward, weight=currCheckPoint.get('whiff_punishment_reward', 0.0)), #checkpoint 1 #checkpoint 3: reduce to 1.0
         
-        # 'weapon_stability_reward': RewTerm(func=weapon_stability_reward, weight=0.5), #checkpoint 2
+        'weapon_stability_reward': RewTerm(func=weapon_stability_reward, weight=currCheckPoint.get('weapon_stability_reward', 0.0)), #checkpoint 2
         
-        # encourage running at opponent especially for start to get more usefull data
-        'proximity_to_opponent_reward': RewTerm(func=proximity_to_opponent_reward, weight=2.0), #checkpoint 2: decrease to 0.5
-        'head_to_opponent': RewTerm(func=head_to_opponent, weight=4.0), 
-        'jumping_on_middle': RewTerm(func=jumping_on_middle, weight=2.0), #checkpoint 1: decrease to 1.0. checkpoint 2: decrease to 0.5 #checkpoint 3: decrease to 0
-        
+        # encourage running at opponent especially for start to get more useful data
+        'proximity_to_opponent_reward': RewTerm(func=proximity_to_opponent_reward, weight=currCheckPoint['proximity_to_opponent_reward']), 
+        'head_to_opponent': RewTerm(func=head_to_opponent, weight=currCheckPoint['head_to_opponent']), 
+        'jumping_on_middle': RewTerm(func=jumping_on_middle, weight=currCheckPoint['jumping_on_middle']), # checkpoint-driven weights
         
         # Keep these disabled/zero
-        # 'stage_control': RewTerm(func=stage_control, weight=0.0)
-        # 'time_pressure_reward': RewTerm(func=time_pressure_reward, weight=0.0),
+        # 'stage_control': RewTerm(func=stage_control, weight=currCheckPoint.get('stage_control', 0.0))
+        # 'time_pressure_reward': RewTerm(func=time_pressure_reward, weight=currCheckPoint.get('time_pressure_reward', 0.0)),
         # Time pressure - prevent stalling
         # Contextual edge avoidance - allows edge-guarding (STRONG penalty to prevent jumping off)
-        # 'edge_avoidance_reward': RewTerm(func=edge_avoidance_reward, weight=12.0, params={'danger_zone': 0.0}),
-        # 'fall_velocity_penalty': RewTerm(func=fall_velocity_penalty, weight=12.0, params={'max_safe_velocity': 0.0}),
+        # 'edge_avoidance_reward': RewTerm(func=edge_avoidance_reward, weight=currCheckPoint.get('edge_avoidance_reward', 0.0), params={'danger_zone': 0.0}),
+        # 'fall_velocity_penalty': RewTerm(func=fall_velocity_penalty, weight=currCheckPoint.get('fall_velocity_penalty', 0.0), params={'max_safe_velocity': 0.0}),
         # Survival bonus - encourage staying alive
-        # 'survival_bonus': RewTerm(func=survival_bonus, weight=0.0),
+        # 'survival_bonus': RewTerm(func=survival_bonus, weight=currCheckPoint.get('survival_bonus', 0.0)),
         # INCREASED: Retreat penalty - stop running away, engage!
-        # 'retreat_penalty': RewTerm(func=retreat_penalty, weight=0.0),
-        # 'danger_zone_reward': RewTerm(func=danger_zone_reward, weight=0.0),
-        # 'penalize_attack_reward': RewTerm(func=in_state_reward, weight=0.0),
-        # 'holding_more_than_3_keys': RewTerm(func=holding_more_than_3_keys, weight=0.0),
+        # 'retreat_penalty': RewTerm(func=retreat_penalty, weight=currCheckPoint.get('retreat_penalty', 0.0)),
+        # 'danger_zone_reward': RewTerm(func=danger_zone_reward, weight=currCheckPoint.get('danger_zone_reward', 0.0)),
+        # 'penalize_attack_reward': RewTerm(func=in_state_reward, weight=currCheckPoint.get('penalize_attack_reward', 0.0)),
+        # 'holding_more_than_3_keys': RewTerm(func=holding_more_than_3_keys, weight=currCheckPoint.get('holding_more_than_3_keys', 0.0)),
     }
     signal_subscriptions = {
         # TERMINAL REWARDS
-        'on_win_reward': ('win_signal', RewTerm(func=on_win_reward, weight=100)),
-        'on_knockout_reward': ('knockout_signal', RewTerm(func=on_knockout_reward, weight=20)), # checkpoint 1: increase to 80 #checkpoint 2: increase to 90
+        'on_win_reward': ('win_signal', RewTerm(func=on_win_reward, weight=currCheckPoint.get('on_win_reward', 0.0))),
+        'on_knockout_reward': ('knockout_signal', RewTerm(func=on_knockout_reward, weight=currCheckPoint.get('on_knockout_reward', 0.0))),
         
         # Combo per extra hit - prevents dwarfing KO
-        # 'on_combo_reward': ('hit_during_stun', RewTerm(func=on_combo_reward, weight=8)), #checpoint 3
+        'on_combo_reward': ('hit_during_stun', RewTerm(func=on_combo_reward, weight=currCheckPoint.get('on_combo_reward', 0.0))),
         
         # Weapon rewards
-        # 'on_equip_reward': ('weapon_equip_signal', RewTerm(func=on_equip_reward, weight=0.01)), #checkpoint 2
-        # 'on_drop_reward': ('weapon_drop_signal', RewTerm(func=on_drop_reward, weight=0.009)) # checkpoint 2
+        'on_equip_reward': ('weapon_equip_signal', RewTerm(func=on_equip_reward, weight=currCheckPoint.get('on_equip_reward', 0.0))),
+        'on_drop_reward': ('weapon_drop_signal', RewTerm(func=on_drop_reward, weight=currCheckPoint.get('on_drop_reward', 0.0))),
         
         # Edge-to-KO conversion bonus
         # 'edge_to_ko_bonus': ('knockout_signal', RewTerm(func=edge_to_ko_bonus, weight=0.0)), #never
@@ -1082,12 +1142,14 @@ if __name__ == '__main__':
     # Start here if you want to train from a specific timestep. e.g:
     #my_agent = RecurrentPPOAgent(file_path='checkpoints/experiment_3/rl_model_120006_steps.zip')
 
-    # Reward manager
-    reward_manager = gen_reward_manager()
     # Self-play settings
     selfplay_handler = SelfPlayLatest(
         partial(type(my_agent)), # Agent class and its keyword arguments
                                  # type(my_agent) = Agent class
+    )
+
+    selfplay_random = SelfPlayRandom(
+        partial(type(my_agent))
     )
 
     # Set save settings here:
@@ -1097,60 +1159,66 @@ if __name__ == '__main__':
         max_saved=40, # Maximum number of saved models
         save_path='checkpoints', # Save path
         run_name='amin',  # Fresh training with aggressive chase + no whiffs
-        mode=SaveHandlerMode.FORCE  # Start completely fresh
+        mode=SaveHandlerMode.RESUME  # Start completely fresh
     )
 
     # Set opponent settings here:
-    opponent_specification = {
-                    'self_play': (5, selfplay_handler),
+    opponent_spec0 = {
+                    'self_play': (2.5, selfplay_handler),
+                    'self_play_random': (2.5,selfplay_random),
                     'constant_agent': (5, partial(ConstantAgent)),
                     'easy_hard_coded_bot': (0, partial(EasyHardCodedBot)),
                     'hard_hard_coded_bot': (0,partial(HardHardCodedBot))
                 }
     
-    """
-    pretraining: 40%:
-        whatever we have
+    opponent_spec1 = {
+        'self_play': (4, selfplay_handler),
+        'constant_agent': (2, partial(ConstantAgent)),
+        'easy_hard_coded_bot': (4, partial(EasyHardCodedBot)),
+        'hard_hard_coded_bot': (0,partial(HardHardCodedBot))
+    }   
 
+    opponent_spec2 = {
+        'self_play': (6, selfplay_handler),
+        'constant_agent': (0, partial(ConstantAgent)),
+        'easy_hard_coded_bot': (3, partial(EasyHardCodedBot)),
+        'hard_hard_coded_bot': (1,partial(HardHardCodedBot))
+    }
+
+    opponent_spec3 = {
+        'self_play': (6, selfplay_handler),
+        'constant_agent': (0, partial(ConstantAgent)),
+        'easy_hard_coded_bot': (1, partial(EasyHardCodedBot)),
+        'hard_hard_coded_bot': (3,partial(HardHardCodedBot))
+    }
     
-    checkpoint 1: 20%
-        opponent_spec: 
-            'self_play': (4, selfplay_handler),
-            'constant_agent': (2, partial(ConstantAgent)),
-            'easy_hard_coded_bot': (4, partial(EasyHardCodedBot)),
-            'hard_hard_coded_bot': (0,partial(HardHardCodedBot))
     
-    checkpoint 2: 20%
-        opponent_spec: 
-            'self_play': (6, selfplay_handler),
-            'constant_agent': (0, partial(ConstantAgent)),
-            'easy_hard_coded_bot': (3, partial(EasyHardCodedBot)),
-            'hard_hard_coded_bot': (1,partial(HardHardCodedBot))
+    opponent_specDict = {
+        0:opponent_spec0,
+        1:opponent_spec1,
+        2:opponent_spec2,
+        3:opponent_spec3,
+    }
 
+    timeStepDict = {
+        0: 0.4,
+        1: 0.2,
+        2: 0.2,
+        3: 0.2,
+    }
+    totalSteps = 30_000_000
+    for i in range(4):
+        print(f"line1242: currently at checkpoint: {i}")
+        # Reward manager
+        reward_manager = gen_reward_manager(i)
 
-    checkpoint 3: 20%
-        opponent_spec: 
-            'self_play': (6, selfplay_handler),
-            'constant_agent': (0, partial(ConstantAgent)),
-            'easy_hard_coded_bot': (1, partial(EasyHardCodedBot)),
-            'hard_hard_coded_bot': (3,partial(HardHardCodedBot))
-    
-    anyTimeLeft:
-        opponent_spec: 
-            'self_play': (8, selfplay_handler),
-            'constant_agent': (0, partial(ConstantAgent)),
-            'easy_hard_coded_bot': (0, partial(EasyHardCodedBot)),
-            'hard_hard_coded_bot': (2,partial(HardHardCodedBot))
-    """
+        opponent_cfg = OpponentsCfg(opponents=opponent_specDict[i])
 
-
-    opponent_cfg = OpponentsCfg(opponents=opponent_specification)
-
-    train(my_agent,
-        reward_manager,
-        save_handler,
-        opponent_cfg,
-        CameraResolution.LOW,
-        train_timesteps=10_000_000,  # Continue training (total 15M from start)
-        train_logging=TrainLogging.PLOT
-    )
+        train(my_agent,
+            reward_manager,
+            save_handler,
+            opponent_cfg,
+            CameraResolution.LOW,
+            train_timesteps=timeStepDict[i],  # Continue training (total 15M from start)
+            train_logging=TrainLogging.PLOT
+        )

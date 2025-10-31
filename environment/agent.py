@@ -454,7 +454,7 @@ class OpponentsCfg():
 
         # If self-play is selected, return the trained model
         print(f'Selected {agent_name}')
-        if agent_name == "self_play":
+        if agent_name.startswith("self_play"):
             selfplay_handler: SelfPlayHandler = self.opponents[agent_name][1]
             return selfplay_handler.get_opponent()
         else:
