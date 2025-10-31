@@ -330,10 +330,9 @@ class MLPWithLayerNorm(BaseFeaturesExtractor):
         #   3. SiLU + dropout?
         self.model = nn.Sequential(
             nn.Linear(in_dim, 256), 
-            nn.LayerNorm(256),
             nn.SiLU(),
+
             nn.Linear(256,features_dim),
-            nn.LayerNorm(features_dim),
             nn.SiLU()
         )
 
@@ -352,6 +351,10 @@ class CustomAgent(Agent):
         print(type(self.env.action_space))
         self.env = DiscreteToBinary10(self.env)
         if self.file_path is None:
+            # Set device for GPU training
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            print(f"Using device: {device}")
+            
             policy_kwargs=dict(
                 n_quantiles=50,
                 features_extractor_class=MLPWithLayerNorm,
@@ -366,9 +369,10 @@ class CustomAgent(Agent):
                     gamma=0.99,
                     train_freq=8,
                     target_update_interval=8_000, #TODO: try with 4_000 if you see spikes later in training
-                    exploration_fraction=0.3, # TODO: EXPERIMENT: 0.5 - 0.2 
+                    exploration_fraction=0.5, # TODO: EXPERIMENT: 0.5 - 0.2 
                     verbose=0,
                     policy_kwargs=policy_kwargs,
+                    device=device,  # Use GPU if available
                 )
             del self.env
         else:
@@ -552,7 +556,7 @@ def head_to_opponent(
 
     # Apply penalty if the player is in the danger zone
     multiplier = -1 if player.body.position.x > opponent.body.position.x else 1
-    reward = multiplier * (player.body.position.x - player.prev_x)
+    reward = multiplier * (player.body.position.x - player.prev_x) * env.dt
 
     return reward
 
@@ -880,19 +884,55 @@ def jumping_on_middle(env:WarehouseBrawl):
     reward for getting on middle
     """
     player: Player = env.objects['player']
-    platform = env.objects['platform1']
+    platform = env.objects['platform1']  # This is the moving platform
     
-    # Check if player is on the moving platform
-    if player.is_on_floor() and player.body.position.y <= platform.body.position.y + 0.1:
-        # Check if player is near the platform's x position
-        platform_x = platform.body.position.x
-        edge_x = 1.25  # Platform half-width
-        x = player.body.position.x
-        
-        if platform_x - edge_x < x < platform_x + edge_x:
-            return 2.0 * env.dt
+    # Get platform position directly from environment object
+    platform_x = platform.body.position.x
+    platform_y = platform.body.position.y
+    edge_x = 1  # Platform half-width (from environment code)
     
+    x = player.body.position.x
+    y = player.body.position.y
+    
+    # Check if player is on the platform AND platform is near middle (x ≈ 0)
+    player_on_platform = platform_x - edge_x < x < platform_x + edge_x and  y < platform_y
+    if player_on_platform:
+        return 2.0 * env.dt
     return 0.0
+
+def idle_penalty(env: WarehouseBrawl) -> float:
+    """
+    Penalize player for being idle (low velocity)
+    """
+    p = env.objects["player"]
+    vx, vy = p.body.velocity.x, p.body.velocity.y
+    if abs(vx) < 0.5 and abs(vy) < 0.5:
+        return -0.1 * env.dt
+    return 0.0
+
+def no_input_penalty(env: WarehouseBrawl) -> float:
+    """
+    Punish doing nothing at all this frame
+    """
+    a = env.objects["player"].cur_action
+    return (-0.05 * env.dt) if (a <= 0.5).all() else 0.0
+
+def forward_progress_reward(env: WarehouseBrawl) -> float:
+    """
+    Always pay for moving toward opponent this frame
+    """
+    p = env.objects["player"]
+    o = env.objects["opponent"]
+    dx = p.body.position.x - p.prev_x
+    sign = 1 if p.body.position.x < o.body.position.x else -1
+    return sign * dx  # positive if moved toward, negative if moved away
+
+def min_speed_reward(env: WarehouseBrawl) -> float:
+    """
+    Small bonus for having some horizontal speed, 0 when already fast
+    """
+    vx = abs(env.objects["player"].body.velocity.x)
+    return min(vx, 1.0) * 0.02 * env.dt
 
 '''
 Add your dictionary of RewardFunctions here using RewTerms
@@ -907,7 +947,7 @@ def gen_reward_manager():
         # 'advantage_state_reward': RewTerm(func=advantage_state_reward, weight=1.5),
         
         # Whiff punishment - STRONGER to stop spam attacking air
-        # 'whiff_punishment_reward': RewTerm(func=whiff_punishment_reward, weight=3.0),
+        # 'whiff_punishment_reward': RewTerm(func=whiff_punishment_reward, weight=0.7),
         
         # Time pressure - prevent stalling
         # 'time_pressure_reward': RewTerm(func=time_pressure_reward, weight=0.5),
@@ -919,17 +959,23 @@ def gen_reward_manager():
         # 'weapon_stability_reward': RewTerm(func=weapon_stability_reward, weight=0.5),
         
         # Contextual edge avoidance - allows edge-guarding (STRONG penalty to prevent jumping off)
-        # 'edge_avoidance_reward': RewTerm(func=edge_avoidance_reward, weight=12.0, params={'danger_zone': 3.0}),
+        # 'edge_avoidance_reward': RewTerm(func=edge_avoidance_reward, weight=4.0, params={'danger_zone': 3.0}),
         # 'fall_velocity_penalty': RewTerm(func=fall_velocity_penalty, weight=12.0, params={'max_safe_velocity': 60.0}),
         
         # Survival bonus - encourage staying alive
-        # 'survival_bonus': RewTerm(func=survival_bonus, weight=3.0),
+        # 'survival_bonus': RewTerm(func=survival_bonus, weight=2.0),
         
         # INCREASED proximity/chase rewards - encourage running at opponent
         'proximity_to_opponent_reward': RewTerm(func=proximity_to_opponent_reward, weight=2.0),
-        'head_to_opponent': RewTerm(func=head_to_opponent, weight=4.0),
-        'jumping_on_middle': RewTerm(func=jumping_on_middle, weight=2.0),
-        # Keep these disabled/zero
+        'head_to_opponent': RewTerm(func=head_to_opponent, weight=5.0),
+        'jumping_on_middle': RewTerm(func=jumping_on_middle, weight=4.0),
+        
+        # # Movement and engagement rewards
+        # 'forward_progress_reward': RewTerm(func=forward_progress_reward, weight=1.5),
+        # 'min_speed_reward': RewTerm(func=min_speed_reward, weight=2.0),
+        # 'idle_penalty': RewTerm(func=idle_penalty, weight=1),
+        # 'no_input_penalty': RewTerm(func=no_input_penalty, weight=1),
+        # # Keep these disabled/zero
         # 'danger_zone_reward': RewTerm(func=danger_zone_reward, weight=0.0),
         # 'penalize_attack_reward': RewTerm(func=in_state_reward, weight=0.0),
         # 'holding_more_than_3_keys': RewTerm(func=holding_more_than_3_keys, weight=0.0),
@@ -958,10 +1004,10 @@ The main function runs training. You can change configurations such as the Agent
 '''
 if __name__ == '__main__':
     # Start FRESH with improved rewards (RECOMMENDED)
-    my_agent = CustomAgent(sb3_class=QRDQN, extractor=MLPExtractor)
+    # my_agent = CustomAgent(sb3_class=QRDQN, extractor=MLPExtractor)
     
     # OR: Continue from checkpoint (only if you want to try adapting old behavior):
-    # my_agent = CustomAgent(sb3_class=PPO, file_path='checkpoints/experiment_fixed_v2/rl_model_XXXXXX_steps.zip', extractor=MLPExtractor)
+    my_agent = CustomAgent(sb3_class=QRDQN, file_path='checkpoints/num2/rl_model_800000_steps.zip', extractor=MLPExtractor)
 
     # Start here if you want to train from scratch. e.g:
     #my_agent = RecurrentPPOAgent()
@@ -983,16 +1029,16 @@ if __name__ == '__main__':
         save_freq=50_000, # Save frequency - more frequent to catch good models
         max_saved=40, # Maximum number of saved models
         save_path='checkpoints', # Save path
-        run_name='amin',  # Fresh training with aggressive chase + no whiffs
+        run_name='num2_1',  # Fresh training with aggressive chase + no whiffs
         mode=SaveHandlerMode.FORCE  # Start completely fresh
     )
 
     # Set opponent settings here:
     opponent_specification = {
                     'self_play': (5, selfplay_handler), #start chill
-                    'constant_agent': (5, partial(ConstantAgent)), # 1. decrease this
-                    'based_agent': (0.1, partial(BasedAgent)),  # 1. Increase this later
-                    'clockwork_agent': (0.1,partial(ClockworkAgent)) #1. Increase this
+                    'constant_agent': (2, partial(ConstantAgent)), # 1. decrease this
+                    'based_agent': (0.5, partial(BasedAgent)),  # 1. Increase this later
+                    'clockwork_agent': (0.2,partial(ClockworkAgent)) #1. Increase this
                 }
     opponent_cfg = OpponentsCfg(opponents=opponent_specification)
 
@@ -1001,6 +1047,6 @@ if __name__ == '__main__':
         save_handler,
         opponent_cfg,
         CameraResolution.LOW,
-        train_timesteps=10_000_000,  # Continue training (total 15M from start)
+        train_timesteps=500_000,
         train_logging=TrainLogging.PLOT
     )

@@ -15,6 +15,7 @@
 # We're using PPO by default, but feel free to experiment with other Stable-Baselines 3 algorithms!
 
 import os
+import numpy as np
 import gdown
 from typing import Optional
 from environment.agent import Agent
@@ -70,25 +71,21 @@ class SubmittedAgent(Agent):
         # self.model.policy.pi_features_extractor.model = self.tt_model
 
     def _gdown(self) -> str:
-        # Option 1: Use a local checkpoint after training
-        # Try latest checkpoint first - check ultra-aggressive experiment first
-        experiment_dir = "checkpoints/experiment_ultra_aggressive"
-        if not os.path.isdir(experiment_dir):
-            experiment_dir = "checkpoints/experiment_aggressive"
-        if not os.path.isdir(experiment_dir):
-            # Fallback to original experiment
-            experiment_dir = "checkpoints/experiment_10"
-        if os.path.isdir(experiment_dir):
-            # Find the latest checkpoint
-            files = [f for f in os.listdir(experiment_dir) if f.endswith('.zip')]
-            if files:
-                # Get the checkpoint with the highest step count
-                # Filename format: rl_model_2150042_steps.zip
-                files.sort(key=lambda x: int(x.split('_')[-2]))
-                latest_checkpoint = os.path.join(experiment_dir, files[-1])
-                if os.path.isfile(latest_checkpoint):
-                    print(f"Loading local checkpoint: {latest_checkpoint}")
-                    return latest_checkpoint
+        # Option 1: Use a local checkpoint after training (QRDQN models)
+        # Try latest QRDQN checkpoints first (num4, num3, num2, num1)
+        for exp_name in ['num4', 'num3', 'num2', 'num1', 'e1', 'e']:
+            experiment_dir = f"checkpoints/{exp_name}"
+            if os.path.isdir(experiment_dir):
+                # Find the latest checkpoint
+                files = [f for f in os.listdir(experiment_dir) if f.endswith('.zip')]
+                if files:
+                    # Get the checkpoint with the highest step count
+                    # Filename format: rl_model_2150042_steps.zip
+                    files.sort(key=lambda x: int(x.split('_')[-2]))
+                    latest_checkpoint = os.path.join(experiment_dir, files[-1])
+                    if os.path.isfile(latest_checkpoint):
+                        print(f"Loading local checkpoint: {latest_checkpoint}")
+                        return latest_checkpoint
         
         # Option 2: Download from Google Drive
         data_path = "rl-model.zip"
@@ -100,8 +97,10 @@ class SubmittedAgent(Agent):
         return data_path
 
     def predict(self, obs):
-        action, _ = self.model.predict(obs)
-        return action
+        # QRDQN outputs discrete actions (0-1023) which need to be converted to Box(10) binary vector
+        act_idx, _ = self.model.predict(obs)
+        action = np.array([(act_idx >> i) & 1 for i in range(10)], dtype=np.float32)
+        return action[::-1]  # Reverse to match original action order
 
     def save(self, file_path: str) -> None:
         self.model.save(file_path)
