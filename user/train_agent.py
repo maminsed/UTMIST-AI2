@@ -168,9 +168,9 @@ class BasedAgent(Agent):
         if (pos[1] > 1.6 or pos[1] > opp_pos[1]) and self.time % 2 == 0:
             action = self.act_helper.press_keys(['space'], action)
 
-        # Attack if near
-        if (pos[0] - opp_pos[0])**2 + (pos[1] - opp_pos[1])**2 < 4.0:
-            action = self.act_helper.press_keys(['j'], action)
+        # Attack if near #TODO: change
+        # if (pos[0] - opp_pos[0])**2 + (pos[1] - opp_pos[1])**2 < 4.0:
+        #     action = self.act_helper.press_keys(['j'], action)
         return action
 
 class UserInputAgent(Agent):
@@ -317,7 +317,7 @@ class MLPWithLayerNorm(BaseFeaturesExtractor):
             nn.LayerNorm(256),
             nn.SiLU(),
             nn.Linear(256,features_dim),
-            nn.LayerNorm(256),
+            nn.LayerNorm(features_dim),
             nn.SiLU()
         )
 
@@ -329,6 +329,9 @@ class CustomAgent(Agent):
         self.sb3_class = sb3_class
         self.extractor = extractor
         super().__init__(file_path)
+        print(self.env.action_space)
+        print(type(self.env.action_space))
+
     
     def _initialize(self) -> None:
         print("initializing QRDQN network: uwu")

@@ -3901,8 +3901,8 @@ class Player(GameObject):
         #self.direction = [action[0] - action[1], action[2] - action[3]]
 
         # Reward: TO DELETE
-        multiple = 1 if self.body.position.x < 0 else -1
-        self.env.add_reward(self.agent_id, multiple * (self.body.position.x - self.prev_x))
+        # multiple = 1 if self.body.position.x < 0 else -1
+        # self.env.add_reward(self.agent_id, multiple * (self.body.position.x - self.prev_x))
 
     def physics_process(self, delta: float) -> None:
         new_state: PlayerObjectState = self.state.physics_process(delta)
