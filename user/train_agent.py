@@ -282,6 +282,21 @@ class MLPPolicy(nn.Module):
         x = F.relu(self.fc2(x))
         return self.fc3(x)
 
+class DiscreteToBinary10(gymnasium.ActionWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        # Expose a Discrete action space to the algorithm
+        self.action_space = spaces.Discrete(2 ** 10)
+    @staticmethod
+    def _int_to_bits10(act_idx: int) -> np.ndarray:
+        # [b9, b8, ..., b0] — match your env’s bit order as needed
+        bits = np.array([(act_idx >> i) & 1 for i in range(10)], dtype=np.float32)
+        return bits[::-1]  # reverse if your env expects MSB-first
+
+    def action(self, act_idx):
+        # Map Discrete -> original Box(10,)
+        return self._int_to_bits10(int(act_idx))
+
 class MLPExtractor(BaseFeaturesExtractor):
     '''
     Class that defines an MLP Base Features Extractor
@@ -308,7 +323,6 @@ class MLPExtractor(BaseFeaturesExtractor):
 class MLPWithLayerNorm(BaseFeaturesExtractor):
     def __init__(self, observation_space:gym.Space, features_dim:int = 256):
         super().__init__(observation_space, features_dim)
-        self.action_space = spaces.Discrete(2**10)
         in_dim = observation_space.shape[0]
         #TODO: EXPERIMENT:
         #   1. without LayerNorm
@@ -331,12 +345,12 @@ class CustomAgent(Agent):
         self.sb3_class = sb3_class
         self.extractor = extractor
         super().__init__(file_path)
-        print(self.env.action_space)
 
     
     def _initialize(self) -> None:
         print("initializing QRDQN network: uwu")
         print(type(self.env.action_space))
+        self.env = DiscreteToBinary10(self.env)
         if self.file_path is None:
             policy_kwargs=dict(
                 n_quantiles=50,
