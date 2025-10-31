@@ -288,7 +288,7 @@ class MLPExtractor(BaseFeaturesExtractor):
     '''
     def __init__(self, observation_space: gym.Space, features_dim: int = 64, hidden_dim: int = 64):
         super(MLPExtractor, self).__init__(observation_space, features_dim)
-        self.action_space = spaces.Discrete(2**10)
+        
         self.model = MLPPolicy(
             obs_dim=observation_space.shape[0], 
             action_dim=10,
@@ -308,6 +308,7 @@ class MLPExtractor(BaseFeaturesExtractor):
 class MLPWithLayerNorm(BaseFeaturesExtractor):
     def __init__(self, observation_space:gym.Space, features_dim:int = 256):
         super().__init__(observation_space, features_dim)
+        self.action_space = spaces.Discrete(2**10)
         in_dim = observation_space.shape[0]
         #TODO: EXPERIMENT:
         #   1. without LayerNorm
