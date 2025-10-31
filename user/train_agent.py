@@ -724,7 +724,17 @@ def jumping_on_middle(env:WarehouseBrawl):
         return 0.5 * env.dt
     return 0.0
 
-
+def no_input_penalty(env: WarehouseBrawl) -> float:
+    """
+    Punish doing nothing at all this frame
+    """
+    player = env.objects["player"]
+    x = player.body.positoin.x
+    y = player.body.positoin.y
+    prev_x = player.prev_x
+    prev_y = player.prev_y
+    dist = (x-prev_x)**2 + (y-prev_y) ** 2
+    return clip_reward(env.dt * (dist/2 if dist > 1.0 else -1.0),-0.5,0.5)
 
 
 
@@ -849,13 +859,6 @@ def idle_penalty(env: WarehouseBrawl) -> float:
     if abs(vx) < 0.5 and abs(vy) < 0.5:
         return -0.1 * env.dt
     return 0.0
-
-def no_input_penalty(env: WarehouseBrawl) -> float:
-    """
-    Punish doing nothing at all this frame
-    """
-    a = env.objects["player"].cur_action
-    return (-0.05 * env.dt) if (a <= 0.5).all() else 0.0
 
 def forward_progress_reward(env: WarehouseBrawl) -> float:
     """
@@ -1059,6 +1062,7 @@ def gen_reward_manager(numCheckpoint:int):
             'proximity_to_opponent_reward': 2.0,
             'head_to_opponent': 4.0,
             'jumping_on_middle': 2.0,
+            'no_input_penalty': 2.0,
             'on_win_reward': 100,
             'on_knockout_reward': 20,
             'on_combo_reward': 0.0,
@@ -1073,6 +1077,7 @@ def gen_reward_manager(numCheckpoint:int):
             'proximity_to_opponent_reward': 2.0,
             'head_to_opponent': 4.0,
             'jumping_on_middle': 1.0,
+            'no_input_penalty': 0.01,
             'on_win_reward': 100,
             'on_knockout_reward': 80,
             'on_combo_reward': 0.0,
@@ -1119,13 +1124,13 @@ def gen_reward_manager(numCheckpoint:int):
         
         # Whiff punishment
         'whiff_punishment_reward': RewTerm(func=whiff_punishment_reward, weight=currCheckPoint.get('whiff_punishment_reward', 0.0)), #checkpoint 1 #checkpoint 3: reduce to 1.0
-        
         'weapon_stability_reward': RewTerm(func=weapon_stability_reward, weight=currCheckPoint.get('weapon_stability_reward', 0.0)), #checkpoint 2
         
         # encourage running at opponent especially for start to get more useful data
         'proximity_to_opponent_reward': RewTerm(func=proximity_to_opponent_reward, weight=currCheckPoint['proximity_to_opponent_reward']), 
         'head_to_opponent': RewTerm(func=head_to_opponent, weight=currCheckPoint['head_to_opponent']), 
         'jumping_on_middle': RewTerm(func=jumping_on_middle, weight=currCheckPoint['jumping_on_middle']), # checkpoint-driven weights
+        'no_input_penalty': RewTerm(func=no_input_penalty, weight=currCheckPoint.get('no_input_penalty',0.0))
         
         # Keep these disabled/zero
         # 'stage_control': RewTerm(func=stage_control, weight=currCheckPoint.get('stage_control', 0.0))
