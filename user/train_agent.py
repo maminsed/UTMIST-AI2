@@ -736,7 +736,11 @@ def no_input_penalty(env: WarehouseBrawl) -> float:
     dist = (x-prev_x)**2 + (y-prev_y) ** 2
     return clip_reward(env.dt * (dist/2 if dist > 1.0 else -1.0),-0.5,0.5)
 
+def bad_taunt(env: BoxToMultiBinary10) -> float:
+    unwrapped: WarehouseBrawl = env.unwrapped
+    player_move = unwrapped.obs_helper("player_move_types")
 
+    return 0.0
 
 
 
@@ -1062,6 +1066,7 @@ def gen_reward_manager(numCheckpoint:int):
             'proximity_to_opponent_reward': 2.0,
             'head_to_opponent': 4.0,
             'jumping_on_middle': 2.0,
+            'bad_taunt': 1.0,
             'no_input_penalty': 2.0,
             'on_win_reward': 100,
             'on_knockout_reward': 20,
