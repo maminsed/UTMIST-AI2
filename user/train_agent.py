@@ -736,9 +736,26 @@ def no_input_penalty(env: WarehouseBrawl) -> float:
     dist = (x-prev_x)**2 + (y-prev_y) ** 2
     return clip_reward(env.dt * (dist/2 if dist > 1.0 else -1.0),-0.5,0.5)
 
+state_mapping = [
+    'WalkingState',
+    'StandingState',
+    'TurnaroundState',
+    'AirTurnaroundState',
+    'SprintingState',
+    'StunState',
+    'InAirState',
+    'DodgeState',
+    'AttackState',
+    'DashState',
+    'BackDashState',
+    'KOState',
+    'TauntState',
+]
 def bad_taunt(env: BoxToMultiBinary10) -> float:
     unwrapped: WarehouseBrawl = env.unwrapped
     player_move = unwrapped.obs_helper("player_move_types")
+    if state_mapping[player_move[0]] == 'TauntState':
+        return clip_reward(-1.0 * env.dt)
 
     return 0.0
 
@@ -1255,18 +1272,33 @@ if __name__ == '__main__':
         3: 0.2,
     }
     totalSteps = 30_000_000
-    for i in range(4):
-        print(f"line1242: currently at checkpoint: {i}")
-        # Reward manager
-        reward_manager = gen_reward_manager(i)
+    #overnight or rightnow
+    state = 'overnight' 
+    if state == 'overnight':
+        for i in range(4):
+            print(f"line1242: currently at checkpoint: {i}")
+            # Reward manager
+            reward_manager = gen_reward_manager(i)
 
-        opponent_cfg = OpponentsCfg(opponents=opponent_specDict[i])
+            opponent_cfg = OpponentsCfg(opponents=opponent_specDict[i])
 
+            train(my_agent,
+                reward_manager,
+                save_handler,
+                opponent_cfg,
+                CameraResolution.LOW,
+                train_timesteps=timeStepDict[i]*totalSteps,  # Continue training (total 15M from start)
+                train_logging=TrainLogging.PLOT
+            )
+    elif state == 'rightnow':
+        reward_manager = gen_reward_manager(0)
+
+        opponent_cfg = OpponentsCfg(opponents=opponent_specDict[0])
         train(my_agent,
             reward_manager,
             save_handler,
             opponent_cfg,
             CameraResolution.LOW,
-            train_timesteps=timeStepDict[i],  # Continue training (total 15M from start)
+            train_timesteps=totalSteps,  # Continue training (total 15M from start)
             train_logging=TrainLogging.PLOT
         )
