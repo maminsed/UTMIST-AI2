@@ -18,6 +18,7 @@ import os
 import numpy as np
 import gdown
 from typing import Optional
+from gymnasium import spaces, ActionWrapper
 from environment.agent import Agent
 # from stable_baselines3 import PPO, A2C # Sample RL Algo imports
 from sb3_contrib import QRDQN # Importing an LSTM
@@ -25,6 +26,21 @@ from sb3_contrib import QRDQN # Importing an LSTM
 # To run the sample TTNN model, you can uncomment the 2 lines below: 
 # import ttnn
 # from user.my_agent_tt import TTMLPPolicy
+
+class DiscreteToBinary10(ActionWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        # Expose a Discrete action space to the algorithm
+        self.action_space = spaces.Discrete(2 ** 10)
+    @staticmethod
+    def _int_to_bits10(act_idx: int):
+        # [b9, b8, ..., b0] — match your env’s bit order as needed
+        bits = np.array([(act_idx >> i) & 1 for i in range(10)], dtype=np.float32)
+        return bits[::-1]  # reverse if your env expects MSB-first
+
+    def action(self, act_idx):
+        # Map Discrete -> original Box(10,)
+        return self._int_to_bits10(int(act_idx))
 
 
 class SubmittedAgent(Agent):
@@ -43,21 +59,22 @@ class SubmittedAgent(Agent):
 
     def _initialize(self) -> None:
         if self.file_path is None:
-            # For training: create new model
-            self.model = QRDQN(
-                    "MlpPolicy", 
-                    self.env, 
-                    buffer_size=400_000,
-                    learning_starts=2_000,
-                    batch_size=256,
-                    gamma=0.99,
-                    train_freq=8,
-                    target_update_interval=8_000,
-                    exploration_fraction=0.5, # lower it if you want it to learn faster
-                    verbose=0,
-                    policy_kwargs={'n_quantiles':50},
-                )
-            del self.env
+            raise RuntimeError("Please give it a filepath.")
+            # # For training: create new model
+            # self.model = QRDQN(
+            #         "MlpPolicy", 
+            #         self.env, 
+            #         buffer_size=400_000,
+            #         learning_starts=2_000,
+            #         batch_size=256,
+            #         gamma=0.99,
+            #         train_freq=8,
+            #         target_update_interval=8_000,
+            #         exploration_fraction=0.5, # lower it if you want it to learn faster
+            #         verbose=0,
+            #         policy_kwargs={'n_quantiles':50},
+            #     )
+            # del self.env
         else:
             # For inference: load trained model
             self.model = QRDQN.load(self.file_path)
@@ -90,6 +107,7 @@ class SubmittedAgent(Agent):
         # Option 2: Download from Google Drive
         data_path = "rl-model.zip"
         if not os.path.isfile(data_path):
+            print("downloading from internet")
             print(f"Downloading {data_path}...")
             # Place a link to your PUBLIC model data here. This is where we will download it from on the tournament server.
             url = "https://drive.google.com/file/d/1JIokiBOrOClh8piclbMlpEEs6mj3H1HJ/view?usp=sharing"
@@ -107,5 +125,5 @@ class SubmittedAgent(Agent):
 
     # If modifying the number of models (or training in general), modify this
     def learn(self, env, total_timesteps, log_interval: int = 4):
-        self.model.set_env(env)
+        self.model.set_env(DiscreteToBinary10(env))
         self.model.learn(total_timesteps=total_timesteps, log_interval=log_interval)
