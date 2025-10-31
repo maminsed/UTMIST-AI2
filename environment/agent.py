@@ -1019,6 +1019,27 @@ def train(agent: Agent,
         log_dir = f"{save_handler._experiment_path()}/" if save_handler is not None else "/tmp/gym/"
         os.makedirs(log_dir, exist_ok=True)
 
+        # Preserve existing monitor.csv if it exists
+        monitor_file = os.path.join(log_dir, "monitor.csv")
+        backup_file = os.path.join(log_dir, "monitor_backup.txt")
+        
+        # Backup existing monitor.csv before Monitor potentially overwrites it
+        # Append to backup file instead of overwriting to preserve history
+        if os.path.exists(monitor_file):
+            try:
+                with open(monitor_file, 'r') as f_in:
+                    content = f_in.read()
+                # Append to backup file with a separator
+                with open(backup_file, 'a') as f_out:
+                    f_out.write(f"\n{'='*80}\n")
+                    f_out.write(f"Backup at: {os.path.basename(log_dir)} - Checkpoint initialization\n")
+                    f_out.write(f"{'='*80}\n")
+                    f_out.write(content)
+                    f_out.write("\n")
+                print(f"Appended existing monitor.csv to {backup_file}")
+            except Exception as e:
+                print(f"Warning: Could not backup monitor.csv: {e}")
+
         # Logs will be saved in log_dir/monitor.csv
         env = Monitor(env, log_dir)
 
@@ -1037,6 +1058,26 @@ def train(agent: Agent,
 
     if save_handler is not None:
         save_handler.save_agent()
+    
+    # Final backup of monitor.csv after training completes
+    # Append to backup file to preserve history
+    if train_logging != TrainLogging.NONE:
+        monitor_file = os.path.join(log_dir, "monitor.csv")
+        backup_file = os.path.join(log_dir, "monitor_backup.txt")
+        if os.path.exists(monitor_file):
+            try:
+                with open(monitor_file, 'r') as f_in:
+                    content = f_in.read()
+                # Append to backup file with a separator
+                with open(backup_file, 'a') as f_out:
+                    f_out.write(f"\n{'='*80}\n")
+                    f_out.write(f"Backup at: {os.path.basename(log_dir)} - Training completed\n")
+                    f_out.write(f"{'='*80}\n")
+                    f_out.write(content)
+                    f_out.write("\n")
+                print(f"Appended final backup of monitor.csv to {backup_file}")
+            except Exception as e:
+                print(f"Warning: Could not create final backup: {e}")
 
     if train_logging == TrainLogging.PLOT:
         plot_results(log_dir)

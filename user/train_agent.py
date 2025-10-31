@@ -655,7 +655,7 @@ def on_knockout_reward(env: WarehouseBrawl, agent: str) -> float:
     - You KO them: +50
     - You get KO'd: -50
     """
-    oponent = env.objects['oponent']
+    oponent = env.objects['opponent']
     player = env.objects['player']
     # This signal is emitted for the agent that got KO'd
     # So 'player' means player got KO'd, opponent got KO'd means win
@@ -1024,33 +1024,19 @@ Add your dictionary of RewardFunctions here using RewTerms
 def gen_reward_manager(numCheckpoint:int):
     checkPointDict = {
         0: {
-            'damage_interaction_reward': 1,
-            'advantage_state_reward': 1,
-            'whiff_punishment_reward': 1,
-            'weapon_stability_reward': 1,
-            'proximity_to_opponent_reward': 1,
-            'head_to_opponent': 1,
-            'jumping_on_middle': 1,
-            'on_win_reward': 1,
-            'on_knockout_reward': 1,
-            'on_combo_reward': 1,
-            'on_equip_reward': 1,
-            'on_drop_reward': 1
+            'damage_interaction_reward': 10.0,
+            'advantage_state_reward': 0.0,
+            'whiff_punishment_reward': 0.0,
+            'weapon_stability_reward': 0.0,
+            'proximity_to_opponent_reward': 2.0,
+            'head_to_opponent': 4.0,
+            'jumping_on_middle': 2.0,
+            'on_win_reward': 100,
+            'on_knockout_reward': 20,
+            'on_combo_reward': 0.0,
+            'on_equip_reward': 0.0,
+            'on_drop_reward': 0.0
         },
-        # 0: {
-        #     'damage_interaction_reward': 10.0,
-        #     'advantage_state_reward': 0.0,
-        #     'whiff_punishment_reward': 0.0,
-        #     'weapon_stability_reward': 0.0,
-        #     'proximity_to_opponent_reward': 2.0,
-        #     'head_to_opponent': 4.0,
-        #     'jumping_on_middle': 2.0,
-        #     'on_win_reward': 100,
-        #     'on_knockout_reward': 20,
-        #     'on_combo_reward': 0.0,
-        #     'on_equip_reward': 0.0,
-        #     'on_drop_reward': 0.0
-        # },
         1: {
             'damage_interaction_reward': 15.0,
             'advantage_state_reward': 0.0,
@@ -1241,6 +1227,6 @@ if __name__ == '__main__':
             save_handler,
             opponent_cfg,
             CameraResolution.LOW,
-            train_timesteps=timeStepDict[i],  # Continue training (total 15M from start)
+            train_timesteps= int(timeStepDict[i] * totalSteps),  # Continue training (total 15M from start)
             train_logging=TrainLogging.PLOT
         )
