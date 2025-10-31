@@ -107,10 +107,11 @@ class SubmittedAgent(Agent):
                 if os.path.isfile(latest_checkpoint):
                     print(f"Loading local checkpoint: {latest_checkpoint}")
                     return latest_checkpoint
-        
+        print("downloading from the internet..? (or zip) from somewhere!")
         # Option 2: Download from Google Drive
         data_path = "rl-model.zip"
         if not os.path.isfile(data_path):
+            print("downloading from internet")
             print(f"Downloading {data_path}...")
             # Place a link to your PUBLIC model data here. This is where we will download it from on the tournament server.
             url = "https://drive.google.com/file/d/1JIokiBOrOClh8piclbMlpEEs6mj3H1HJ/view?usp=sharing"

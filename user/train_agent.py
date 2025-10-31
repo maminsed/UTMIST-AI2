@@ -130,9 +130,9 @@ class RecurrentPPOAgent(Agent):
         self.model.verbose = verbose
         self.model.learn(total_timesteps=total_timesteps, log_interval=log_interval)
 
-class BasedAgent(Agent):
+class EasyHardCodedBot(Agent):
     '''
-    BasedAgent:
+    EasyHardCodedBot:
     - Defines a hard-coded Agent that predicts actions based on if-statements. Interesting behaviour can be achieved here.
     - The if-statement algorithm can be developed within the `predict` method below.
     '''
@@ -171,6 +171,71 @@ class BasedAgent(Agent):
         # Attack if near #TODO: change
         # if (pos[0] - opp_pos[0])**2 + (pos[1] - opp_pos[1])**2 < 4.0:
         #     action = self.act_helper.press_keys(['j'], action)
+        return action
+
+class HardHardCodedBot(Agent):
+    '''
+    Input the **file_path** to your agent here for submission!
+    '''
+    def __init__(
+            self,
+            *args,
+            **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        self.time = 0
+        self.prev_pos = None
+        self.down = False
+        self.recover = False
+
+    def predict(self, obs):
+        self.time += 1
+        pos = self.obs_helper.get_section(obs, 'player_pos')
+        opp_pos = self.obs_helper.get_section(obs, 'opponent_pos')
+        opp_KO = self.obs_helper.get_section(obs, 'opponent_state') in [5, 11]
+        action = self.act_helper.zeros()
+        facing = self.obs_helper.get_section(obs, 'player_facing')
+
+        if self.prev_pos is not None:
+            self.down = (pos[1] - self.prev_pos[1]) > 0
+        self.prev_pos = pos
+
+        self.recover = False
+        if pos[0] < -6.9:
+            action = self.act_helper.press_keys(['d'], action)
+            self.recover = True
+        elif pos[0] > -1.9 and pos[0] < 0:
+            action = self.act_helper.press_keys(['a'], action)
+            self.recover = True
+        elif pos[0] > 0 and pos[0] < 1.9:
+            action = self.act_helper.press_keys(['d'], action)
+            self.recover = True
+        elif pos[0] > 6.9:
+            action = self.act_helper.press_keys(['a'], action)
+            self.recover = True
+
+        # Jump if falling
+        if self.down or self.obs_helper.get_section(obs, 'player_grounded') == 1:
+            '''
+            if self.obs_helper.get_section(obs, "player_recoveries_left") > 0:
+                action = self.act_helper.press_keys(['k'], action)
+            else:
+                action = self.act_helper.press_keys(['space'], action)
+            '''
+            if self.time % 10 == 0:
+                action = self.act_helper.press_keys(['space'], action)
+
+        
+        if not self.recover:
+            if opp_pos[0] > pos[0] and facing == 0:
+                action = self.act_helper.press_keys(['d'], action)
+            elif opp_pos[0] < pos[0] and facing == 1:
+                action = self.act_helper.press_keys(['a'], action)
+        
+                
+        # Attack if near
+        if not self.recover and (pos[0] - opp_pos[0])**2 + (pos[1] - opp_pos[1])**2 < 4.0:
+            action = self.act_helper.press_keys(['j'], action)
         return action
 
 class UserInputAgent(Agent):
@@ -257,7 +322,32 @@ class ClockworkAgent(Agent):
         action = self.act_helper.press_keys(self.current_action_data)
         self.steps += 1  # Increment step counter
         return action
+
+
+
+class MLPExtractor(BaseFeaturesExtractor):
+    '''
+    Class that defines an MLP Base Features Extractor
+    '''
+    def __init__(self, observation_space: gym.Space, features_dim: int = 64, hidden_dim: int = 64):
+        super(MLPExtractor, self).__init__(observation_space, features_dim)
+        
+        self.model = MLPPolicy(
+            obs_dim=observation_space.shape[0], 
+            action_dim=10,
+            hidden_dim=hidden_dim,
+        )
     
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        return self.model(obs)
+    
+    @classmethod
+    def get_policy_kwargs(cls, features_dim: int = 64, hidden_dim: int = 64) -> dict:
+        return dict(
+            features_extractor_class=cls,
+            features_extractor_kwargs=dict(features_dim=features_dim, hidden_dim=hidden_dim) #NOTE: features_dim = 10 to match action space output
+        )  
+
 class MLPPolicy(nn.Module):
     def __init__(self, obs_dim: int = 64, action_dim: int = 10, hidden_dim: int = 64):
         """
@@ -282,6 +372,8 @@ class MLPPolicy(nn.Module):
         x = F.relu(self.fc2(x))
         return self.fc3(x)
 
+
+
 class DiscreteToBinary10(gymnasium.ActionWrapper):
     def __init__(self, env):
         super().__init__(env)
@@ -296,30 +388,7 @@ class DiscreteToBinary10(gymnasium.ActionWrapper):
     def action(self, act_idx):
         # Map Discrete -> original Box(10,)
         return self._int_to_bits10(int(act_idx))
-
-class MLPExtractor(BaseFeaturesExtractor):
-    '''
-    Class that defines an MLP Base Features Extractor
-    '''
-    def __init__(self, observation_space: gym.Space, features_dim: int = 64, hidden_dim: int = 64):
-        super(MLPExtractor, self).__init__(observation_space, features_dim)
-        
-        self.model = MLPPolicy(
-            obs_dim=observation_space.shape[0], 
-            action_dim=10,
-            hidden_dim=hidden_dim,
-        )
-    
-    def forward(self, obs: torch.Tensor) -> torch.Tensor:
-        return self.model(obs)
-    
-    @classmethod
-    def get_policy_kwargs(cls, features_dim: int = 64, hidden_dim: int = 64) -> dict:
-        return dict(
-            features_extractor_class=cls,
-            features_extractor_kwargs=dict(features_dim=features_dim, hidden_dim=hidden_dim) #NOTE: features_dim = 10 to match action space output
-        )
-    
+  
 class MLPWithLayerNorm(BaseFeaturesExtractor):
     def __init__(self, observation_space:gym.Space, features_dim:int = 256):
         super().__init__(observation_space, features_dim)
@@ -551,7 +620,7 @@ def head_to_opponent(
 
     # Apply penalty if the player is in the danger zone
     multiplier = -1 if player.body.position.x > opponent.body.position.x else 1
-    reward = multiplier * (player.body.position.x - player.prev_x)
+    reward = clip_reward(multiplier * (player.body.position.x - player.prev_x),-1,1)
 
     return reward
 
@@ -569,10 +638,12 @@ def holding_more_than_3_keys(
     return 0
 
 def on_win_reward(env: WarehouseBrawl, agent: str) -> float:
+    #favouring early wins and penilizing early looses
+    multipier = 100/env.steps if env.steps > 1 else 1
     if agent == 'player':
-        return 1.0
+        return clip_reward(1.0 * multipier, 0.5,2.5)
     else:
-        return -1.0
+        return clip_reward(-1.0 * multipier, 0.5,2.5)
 
 def on_knockout_reward(env: WarehouseBrawl, agent: str) -> float:
     """
@@ -580,13 +651,20 @@ def on_knockout_reward(env: WarehouseBrawl, agent: str) -> float:
     - You KO them: +50
     - You get KO'd: -50
     """
+    oponent = env.objects['oponent']
+    player = env.objects['player']
     # This signal is emitted for the agent that got KO'd
     # So 'player' means player got KO'd, opponent got KO'd means win
     if agent == 'player':
-        return -1.0  # Player got KO'd (will be scaled to -50)
+        if player.damage_taken_this_stock < 15:
+            return -1.5  # You just died??
+        else:
+            return -1.0
     else:
-        return 1.0  # Opponent got KO'd, player wins (will be scaled to +50)
-    
+        if oponent.damage_taken_this_stock < 15:
+            return 0.7  # Opponent got KO'd, player wins - you didn't do anything
+        else:
+            return 1.0
 def on_equip_reward(env: WarehouseBrawl, agent: str) -> float:
     """
     Simple equip reward to prevent weapon camping.
@@ -595,7 +673,9 @@ def on_equip_reward(env: WarehouseBrawl, agent: str) -> float:
     if agent == "player":
         # Just acknowledge weapon pickup, no special bonuses
         player = env.objects["player"]
-        if player.weapon in ["Hammer", "Spear"]:
+        if player.weapon == "Hammer":
+            return 2.0
+        elif player.weapon == "Spear":
             return 1.0
     return 0.0
 
@@ -652,7 +732,7 @@ def whiff_punishment_reward(env: WarehouseBrawl) -> float:
     far_range = 5.0
     
     # Check if player is attacking
-    if hasattr(player.state, 'move_type') and player.state.move_type != MoveType.NONE:
+    if hasattr(player.state, 'move_type') and player.state.move_type not in [MoveType.NONE,MoveType.RECOVERY] and opponent.damage_taken_this_frame == 0:
         # STRONGER penalty if attacking when opponent is far away
         if distance > far_range:
             return -0.15  # Heavy penalty for attacking air when far
@@ -661,13 +741,13 @@ def whiff_punishment_reward(env: WarehouseBrawl) -> float:
         elif distance < threat_range:
             # Classify as heavy or light whiff in range
             is_heavy = player.state.move_type in [
-                MoveType.NSIG, MoveType.DSIG, MoveType.SSIG, MoveType.DAIR, MoveType.SAIR
+                MoveType.NSIG, MoveType.DSIG, MoveType.SSIG, MoveType.GROUNDPOUND
             ]
             
             if is_heavy:
-                return -0.10  # INCREASED: Heavy whiff in range
+                return -0.05  # INCREASED: Heavy whiff in range
             else:
-                return -0.05  # INCREASED: Light whiff in range
+                return -0.01  # INCREASED: Light whiff in range
     
     return 0.0
 
@@ -713,7 +793,7 @@ def advantage_state_reward(env: WarehouseBrawl) -> float:
     # Check if opponent is in StunState
     if isinstance(opponent.state, StunState):
         base_reward = 0.05 * env.dt  # Advantage state reward
-        hitstun_bonus = 0.02 * env.dt  # Tiny per-frame hitstun reward
+        hitstun_bonus = (0.02 * env.dt) if opponent.damage_taken_this_frame else 0 # Tiny per-frame hitstun reward
         return base_reward + hitstun_bonus
     
     return 0.0
@@ -748,7 +828,7 @@ def proximity_to_opponent_reward(env: WarehouseBrawl) -> float:
     # Inverse relationship: closer gets more reward
     if distance < max_distance:
         reward = (max_distance - distance) / max_distance
-        return reward * 0.0005  # INCREASED per-frame reward
+        return reward * 0.005  # INCREASED per-frame reward
     
     return 0.0
 
@@ -868,9 +948,9 @@ def weapon_stability_reward(env: WarehouseBrawl) -> float:
     
     # Reward for having a weapon, slightly more for better weapons
     if player.weapon == "Hammer":
-        return 0.02 * env.dt
+        return 0.002
     elif player.weapon == "Spear":
-        return 0.01 * env.dt
+        return 0.001
     else:
         return 0.0
     
@@ -889,59 +969,97 @@ def jumping_on_middle(env:WarehouseBrawl):
         return 2.0
     return 0.0
 
+def whichPlatform(x,y,positionMap):
+    """
+    1 -> ground1
+    2 -> ground2
+    3 -> moving platform
+    0 -> anything else
+    """
+    
+    for x_start,x_end,y_stage,stage in positionMap:
+        if  x_start < x < x_end and y < y_stage:
+            return stage
+    return 0
+
+def stage_control(env:WarehouseBrawl):
+    """
+    reward for being in the middle of platform when your enemy is on the edge
+    """
+    player = env.objects['player']
+    opponent = env.objects['opponent']
+    middle = env.objects['platform1'].body.position
+    positionMap = [
+        #(x_start,x_end,y)
+        (-7.0,-2.0,2.80,1),
+        (middle[0]-1,middle[0]+1,middle[1],2),
+        (2.0,7.0,0.85,3)
+    ]
+    x_player = player.body.position.x
+    x_opponent = opponent.body.position.x
+    player_plat = whichPlatform(x_player,player.body.position.y,positionMap)
+    opponent_plat = whichPlatform(x_opponent,opponent.body.position.y,positionMap)
+
+    if player_plat and player_plat == opponent_plat:
+        x_start,x_end,_,_ = positionMap[player_plat-1]
+        player_dist = abs(x_player - (x_start + x_end)/2) 
+        opponent_dist = abs(x_opponent - (x_start + x_end)/2)
+        if player_dist <= opponent_dist:
+            return player_dist / (x_end - x_start)
+        else:
+            return -opponent_dist / (x_end - x_start)
+    return 0.0
+
 '''
 Add your dictionary of RewardFunctions here using RewTerms
 '''
 def gen_reward_manager():
     reward_functions = {
-        # BALANCED REWARD SYSTEM - Terminal rewards dominate
-        # Symmetric damage - agent pays for bad trades
-        'damage_interaction_reward': RewTerm(func=damage_interaction_reward, weight=10.0, params={'mode': RewardMode.SYMMETRIC}),
+        'damage_interaction_reward': RewTerm(func=damage_interaction_reward, weight=10.0, params={'mode': RewardMode.SYMMETRIC}), #checkpoint 1 increase to 15
         
-        # NEW: Advantage state reward - encourages pressure maintenance (reduced to avoid accumulation)
-        # 'advantage_state_reward': RewTerm(func=advantage_state_reward, weight=1.5),
+        # Advantage state reward - encourages pressure maintenance
+        # 'advantage_state_reward': RewTerm(func=advantage_state_reward, weight=2.0), #checkpoint 3
         
-        # Whiff punishment - STRONGER to stop spam attacking air
-        # 'whiff_punishment_reward': RewTerm(func=whiff_punishment_reward, weight=3.0),
+        # Whiff punishment
+        # 'whiff_punishment_reward': RewTerm(func=whiff_punishment_reward, weight=4.0), #checkpoint 1 #checkpoint 3: redue to 1.0
         
-        # Time pressure - prevent stalling
-        # 'time_pressure_reward': RewTerm(func=time_pressure_reward, weight=0.5),
+        # 'weapon_stability_reward': RewTerm(func=weapon_stability_reward, weight=0.5), #checkpoint 2
         
-        # INCREASED: Retreat penalty - stop running away, engage!
-        # 'retreat_penalty': RewTerm(func=retreat_penalty, weight=1.5),
+        # encourage running at opponent especially for start to get more usefull data
+        'proximity_to_opponent_reward': RewTerm(func=proximity_to_opponent_reward, weight=2.0), #checkpoint 2: decrease to 0.5
+        'head_to_opponent': RewTerm(func=head_to_opponent, weight=4.0), 
+        'jumping_on_middle': RewTerm(func=jumping_on_middle, weight=2.0), #checkpoint 1: decrease to 1.0. checkpoint 2: decrease to 0.5 #checkpoint 3: decrease to 0
         
-        # Reduced weapon stability - let agent decide when to switch
-        # 'weapon_stability_reward': RewTerm(func=weapon_stability_reward, weight=0.5),
         
-        # Contextual edge avoidance - allows edge-guarding (STRONG penalty to prevent jumping off)
-        # 'edge_avoidance_reward': RewTerm(func=edge_avoidance_reward, weight=12.0, params={'danger_zone': 3.0}),
-        # 'fall_velocity_penalty': RewTerm(func=fall_velocity_penalty, weight=12.0, params={'max_safe_velocity': 60.0}),
-        
-        # Survival bonus - encourage staying alive
-        # 'survival_bonus': RewTerm(func=survival_bonus, weight=3.0),
-        
-        # INCREASED proximity/chase rewards - encourage running at opponent
-        'proximity_to_opponent_reward': RewTerm(func=proximity_to_opponent_reward, weight=2.0),
-        'head_to_opponent': RewTerm(func=head_to_opponent, weight=4.0),
-        'jumping_on_middle': RewTerm(func=jumping_on_middle, weight=2.0),
         # Keep these disabled/zero
+        # 'stage_control': RewTerm(func=stage_control, weight=0.0)
+        # 'time_pressure_reward': RewTerm(func=time_pressure_reward, weight=0.0),
+        # Time pressure - prevent stalling
+        # Contextual edge avoidance - allows edge-guarding (STRONG penalty to prevent jumping off)
+        # 'edge_avoidance_reward': RewTerm(func=edge_avoidance_reward, weight=12.0, params={'danger_zone': 0.0}),
+        # 'fall_velocity_penalty': RewTerm(func=fall_velocity_penalty, weight=12.0, params={'max_safe_velocity': 0.0}),
+        # Survival bonus - encourage staying alive
+        # 'survival_bonus': RewTerm(func=survival_bonus, weight=0.0),
+        # INCREASED: Retreat penalty - stop running away, engage!
+        # 'retreat_penalty': RewTerm(func=retreat_penalty, weight=0.0),
         # 'danger_zone_reward': RewTerm(func=danger_zone_reward, weight=0.0),
         # 'penalize_attack_reward': RewTerm(func=in_state_reward, weight=0.0),
         # 'holding_more_than_3_keys': RewTerm(func=holding_more_than_3_keys, weight=0.0),
     }
     signal_subscriptions = {
-        # TERMINAL REWARDS - These dominate to ensure winning is the main goal
+        # TERMINAL REWARDS
         'on_win_reward': ('win_signal', RewTerm(func=on_win_reward, weight=100)),
-        'on_knockout_reward': ('knockout_signal', RewTerm(func=on_knockout_reward, weight=20)),  # You KO them: +100, You get KO'd: -100 (DOUBLED)
-        # Combo per extra hit - prevents dwarfing KO (weight 6-10)
-        # 'on_combo_reward': ('hit_during_stun', RewTerm(func=on_combo_reward, weight=8)),
+        'on_knockout_reward': ('knockout_signal', RewTerm(func=on_knockout_reward, weight=20)), # checkpoint 1: increase to 80 #checkpoint 2: increase to 90
+        
+        # Combo per extra hit - prevents dwarfing KO
+        # 'on_combo_reward': ('hit_during_stun', RewTerm(func=on_combo_reward, weight=8)), #checpoint 3
+        
+        # Weapon rewards
+        # 'on_equip_reward': ('weapon_equip_signal', RewTerm(func=on_equip_reward, weight=0.01)), #checkpoint 2
+        # 'on_drop_reward': ('weapon_drop_signal', RewTerm(func=on_drop_reward, weight=0.009)) # checkpoint 2
         
         # Edge-to-KO conversion bonus
-        # 'edge_to_ko_bonus': ('knockout_signal', RewTerm(func=edge_to_ko_bonus, weight=1.0)),
-        
-        # Weapon rewards - simple, no special bonuses
-        # 'on_equip_reward': ('weapon_equip_signal', RewTerm(func=on_equip_reward, weight=0.5)),
-        # 'on_drop_reward': ('weapon_drop_signal', RewTerm(func=on_drop_reward, weight=-2))
+        # 'edge_to_ko_bonus': ('knockout_signal', RewTerm(func=edge_to_ko_bonus, weight=0.0)), #never
     }
     return RewardManager(reward_functions, signal_subscriptions)
 
@@ -984,11 +1102,48 @@ if __name__ == '__main__':
 
     # Set opponent settings here:
     opponent_specification = {
-                    'self_play': (5, selfplay_handler), #start chill
-                    'constant_agent': (5, partial(ConstantAgent)), # 1. decrease this
-                    'based_agent': (0, partial(BasedAgent)),  # 1. Increase this later
-                    'clockwork_agent': (0,partial(ClockworkAgent)) #1. Increase this
+                    'self_play': (5, selfplay_handler),
+                    'constant_agent': (5, partial(ConstantAgent)),
+                    'easy_hard_coded_bot': (0, partial(EasyHardCodedBot)),
+                    'hard_hard_coded_bot': (0,partial(HardHardCodedBot))
                 }
+    
+    """
+    pretraining: 40%:
+        whatever we have
+
+    
+    checkpoint 1: 20%
+        opponent_spec: 
+            'self_play': (4, selfplay_handler),
+            'constant_agent': (2, partial(ConstantAgent)),
+            'easy_hard_coded_bot': (4, partial(EasyHardCodedBot)),
+            'hard_hard_coded_bot': (0,partial(HardHardCodedBot))
+    
+    checkpoint 2: 20%
+        opponent_spec: 
+            'self_play': (6, selfplay_handler),
+            'constant_agent': (0, partial(ConstantAgent)),
+            'easy_hard_coded_bot': (3, partial(EasyHardCodedBot)),
+            'hard_hard_coded_bot': (1,partial(HardHardCodedBot))
+
+
+    checkpoint 3: 20%
+        opponent_spec: 
+            'self_play': (6, selfplay_handler),
+            'constant_agent': (0, partial(ConstantAgent)),
+            'easy_hard_coded_bot': (1, partial(EasyHardCodedBot)),
+            'hard_hard_coded_bot': (3,partial(HardHardCodedBot))
+    
+    anyTimeLeft:
+        opponent_spec: 
+            'self_play': (8, selfplay_handler),
+            'constant_agent': (0, partial(ConstantAgent)),
+            'easy_hard_coded_bot': (0, partial(EasyHardCodedBot)),
+            'hard_hard_coded_bot': (2,partial(HardHardCodedBot))
+    """
+
+
     opponent_cfg = OpponentsCfg(opponents=opponent_specification)
 
     train(my_agent,
