@@ -8,7 +8,7 @@ pygame.init()
 my_agent = UserInputAgent()
 
 #Input your file path here in SubmittedAgent if you are loading a model:
-opponent = SubmittedAgent(file_path=r'checkpoints\AMIN_DUMB_AF\rl_model_501760_steps.zip')
+opponent = SubmittedAgent(file_path=r'checkpoints\AMIN_DUMB_AF_2\rl_model_501760_steps.zip')
 # opponent = SubmittedAgent(file_path='checkpoints/agent.zip')
 
 
