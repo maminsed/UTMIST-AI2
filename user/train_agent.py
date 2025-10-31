@@ -568,12 +568,11 @@ def head_to_opponent(
     opponent = env.objects['opponent']
     currDist = phi_distance(player.body.position.x, player.body.position.y,opponent.body.position.x,opponent.body.position.y)
     prevDist = phi_distance(player.prev_x, player.prev_y,opponent.prev_x,opponent.prev_y)
-
-    return  env.dt * clip_reward(currDist - prevDist,-1,1)
+    return  env.dt * clip_reward(prevDist-currDist,-1,1)
 
 def on_win_reward(env: WarehouseBrawl, agent: str) -> float:
     #favouring early wins and penilizing early looses
-    multipier = max(100/ max(env.steps, 1),1)
+    multipier = max(50/ max(env.steps, 1),1)
     if agent == 'player':
         return multipier
     else:
@@ -1086,7 +1085,7 @@ def gen_reward_manager(numCheckpoint:int):
             'proximity_to_opponent_reward': 2.0,
             'head_to_opponent': 4.0,
             'jumping_on_middle': 2.0,
-            'bad_taunt': 1.0,
+            'bad_taunt': 2.0,
             'no_input_penalty': 2.0,
             'on_win_reward': 100,
             'on_knockout_reward': 60,
@@ -1294,9 +1293,10 @@ if __name__ == '__main__':
                 train_logging=TrainLogging.PLOT
             )
     elif state == 'rightnow':
-        reward_manager = gen_reward_manager(0)
+        RUN = 1
+        reward_manager = gen_reward_manager(RUN)
 
-        opponent_cfg = OpponentsCfg(opponents=opponent_specDict[0])
+        opponent_cfg = OpponentsCfg(opponents=opponent_specDict[RUN])
         train(my_agent,
             reward_manager,
             save_handler,
