@@ -549,29 +549,6 @@ def clip_reward(reward: float, min_val: float = -0.2, max_val: float = 0.2) -> f
     """
     return max(min_val, min(max_val, reward))
 
-def head_to_middle_reward(
-    env: WarehouseBrawl,
-) -> float:
-    """
-    Applies a penalty for every time frame player surpases a certain height threshold in the environment.
-
-    Args:
-        env (WarehouseBrawl): The game environment.
-        zone_penalty (int): The penalty applied when the player is in the danger zone.
-        zone_height (float): The height threshold defining the danger zone.
-
-    Returns:
-        float: The computed penalty as a tensor.
-    """
-    # Get player object from the environment
-    player: Player = env.objects["player"]
-
-    # Apply penalty if the player is in the danger zone
-    multiplier = -1 if player.body.position.x > 0 else 1
-    reward = multiplier * (player.body.position.x - player.prev_x)
-
-    return reward
-
 def head_to_opponent(
     env: WarehouseBrawl,
 ) -> float:
@@ -600,7 +577,7 @@ def on_knockout_reward(env: WarehouseBrawl, agent: str) -> float:
     - You KO them: +50
     - You get KO'd: -50
     """
-    oponent = env.objects['oponent']
+    opponent = env.objects['opponent']
     player = env.objects['player']
     # This signal is emitted for the agent that got KO'd
     # So 'player' means player got KO'd, opponent got KO'd means win
@@ -610,7 +587,7 @@ def on_knockout_reward(env: WarehouseBrawl, agent: str) -> float:
         else:
             return -1.0
     else:
-        if oponent.damage_taken_this_stock < 15:
+        if opponent.damage_taken_this_stock < 15:
             return 0.7  # Opponent got KO'd, player wins - you didn't do anything
         else:
             return 1.0
@@ -778,7 +755,28 @@ def jumping_on_middle(env:WarehouseBrawl):
 
 
 
+def head_to_middle_reward(
+    env: WarehouseBrawl,
+) -> float:
+    """
+    Applies a penalty for every time frame player surpases a certain height threshold in the environment.
 
+    Args:
+        env (WarehouseBrawl): The game environment.
+        zone_penalty (int): The penalty applied when the player is in the danger zone.
+        zone_height (float): The height threshold defining the danger zone.
+
+    Returns:
+        float: The computed penalty as a tensor.
+    """
+    # Get player object from the environment
+    player: Player = env.objects["player"]
+
+    # Apply penalty if the player is in the danger zone
+    multiplier = -1 if player.body.position.x > 0 else 1
+    reward = multiplier * (player.body.position.x - player.prev_x)
+
+    return reward
 
 def danger_zone_reward(
     env: WarehouseBrawl,
