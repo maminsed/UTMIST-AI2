@@ -1224,7 +1224,7 @@ if __name__ == '__main__':
         save_freq=50_000, # Save frequency - more frequent to catch good models
         max_saved=40, # Maximum number of saved models
         save_path='checkpoints', # Save path
-        run_name='experiment_run_PPO_IM_DUMB_AF',  # Fresh training with aggressive chase + no whiffs
+        run_name='AMIN_DUMB_AF',  # Fresh training with aggressive chase + no whiffs
         mode=SaveHandlerMode.RESUME  # Start completely fresh
     )
 
@@ -1274,9 +1274,9 @@ if __name__ == '__main__':
         2: 0.2,
         3: 0.2,
     }
-    totalSteps = 30_000_000
+    totalSteps = 500_000
     #overnight or rightnow
-    state = 'overnight' 
+    state = 'rightnow' 
     if state == 'overnight':
         for i in range(4):
             print(f"line1242: currently at checkpoint: {i}")
