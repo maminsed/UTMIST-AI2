@@ -1156,7 +1156,7 @@ def gen_reward_manager(numCheckpoint:int):
         'head_to_opponent': RewTerm(func=head_to_opponent, weight=currCheckPoint['head_to_opponent']), 
         'jumping_on_middle': RewTerm(func=jumping_on_middle, weight=currCheckPoint['jumping_on_middle']), # checkpoint-driven weights
         'no_input_penalty': RewTerm(func=no_input_penalty, weight=currCheckPoint.get('no_input_penalty',0.0)),
-        
+        'bad_taunt': RewTerm(func=no_input_penalty, weight=currCheckPoint.get('bad_taunt',0.0)),
         # Keep these disabled/zero
         # 'stage_control': RewTerm(func=stage_control, weight=currCheckPoint.get('stage_control', 0.0))
         # 'time_pressure_reward': RewTerm(func=time_pressure_reward, weight=currCheckPoint.get('time_pressure_reward', 0.0)),
