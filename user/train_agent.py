@@ -542,54 +542,12 @@ def damage_interaction_reward(
 
 
 # In[ ]:
-
-
-def danger_zone_reward(
-    env: WarehouseBrawl,
-    zone_penalty: int = 1,
-    zone_height: float = 4.2
-) -> float:
+def clip_reward(reward: float, min_val: float = -0.2, max_val: float = 0.2) -> float:
     """
-    Applies a penalty for every time frame player surpases a certain height threshold in the environment.
-
-    Args:
-        env (WarehouseBrawl): The game environment.
-        zone_penalty (int): The penalty applied when the player is in the danger zone.
-        zone_height (float): The height threshold defining the danger zone.
-
-    Returns:
-        float: The computed penalty as a tensor.
+    Clip per-step rewards to [-0.2, +0.2].
+    Terminal rewards are NOT clipped.
     """
-    # Get player object from the environment
-    player: Player = env.objects["player"]
-
-    # Apply penalty if the player is in the danger zone
-    reward = -zone_penalty if player.body.position.y >= zone_height else 0.0
-
-    return reward * env.dt
-
-def in_state_reward(
-    env: WarehouseBrawl,
-    desired_state: Type[PlayerObjectState]=BackDashState,
-) -> float:
-    """
-    Applies a penalty for every time frame player surpases a certain height threshold in the environment.
-
-    Args:
-        env (WarehouseBrawl): The game environment.
-        zone_penalty (int): The penalty applied when the player is in the danger zone.
-        zone_height (float): The height threshold defining the danger zone.
-
-    Returns:
-        float: The computed penalty as a tensor.
-    """
-    # Get player object from the environment
-    player: Player = env.objects["player"]
-
-    # Apply penalty if the player is in the danger zone
-    reward = 1 if isinstance(player.state, desired_state) else 0.0
-
-    return reward * env.dt
+    return max(min_val, min(max_val, reward))
 
 def head_to_middle_reward(
     env: WarehouseBrawl,
@@ -628,26 +586,13 @@ def head_to_opponent(
 
     return reward
 
-def holding_more_than_3_keys(
-    env: WarehouseBrawl,
-) -> float:
-
-    # Get player object from the environment
-    player: Player = env.objects["player"]
-
-    # Apply penalty if the player is holding more than 3 keys
-    a = player.cur_action
-    if (a > 0.5).sum() > 3:
-        return env.dt
-    return 0
-
 def on_win_reward(env: WarehouseBrawl, agent: str) -> float:
     #favouring early wins and penilizing early looses
-    multipier = 100/env.steps if env.steps > 1 else 1
+    multipier = clip_reward(100/ max(env.steps, 1),0.5,2.5)
     if agent == 'player':
-        return clip_reward(1.0 * multipier, 0.5,2.5)
+        return multipier
     else:
-        return clip_reward(-1.0 * multipier, 0.5,2.5)
+        return -multipier
 
 def on_knockout_reward(env: WarehouseBrawl, agent: str) -> float:
     """
@@ -669,6 +614,7 @@ def on_knockout_reward(env: WarehouseBrawl, agent: str) -> float:
             return 0.7  # Opponent got KO'd, player wins - you didn't do anything
         else:
             return 1.0
+
 def on_equip_reward(env: WarehouseBrawl, agent: str) -> float:
     """
     Simple equip reward to prevent weapon camping.
@@ -692,9 +638,6 @@ def on_drop_reward(env: WarehouseBrawl, agent: str) -> float:
 def on_combo_reward(env: WarehouseBrawl, agent: str) -> float:
     """Reward per EXTRA hit after the first - prevents dwarfing KO credit"""
     if agent == 'player':
-        damage_dealt = env.objects["opponent"].damage_taken_this_frame
-        # Pay per extra hit (first hit gets no combo bonus, subsequent hits do)
-        # This encourages extending but doesn't overshadow KOs
         return 0.05  # Per extra hit, scaled by weight
     else:
         return -0.05
@@ -755,6 +698,182 @@ def whiff_punishment_reward(env: WarehouseBrawl) -> float:
     
     return 0.0
 
+def advantage_state_reward(env: WarehouseBrawl) -> float:
+    """
+    Rewards opponent in hitstun + tiny per-frame hitstun reward.
+    Encourages sustained pressure.
+    """
+    player = env.objects["player"]
+    opponent = env.objects["opponent"]
+    
+    # Base reward for having opponent stunned
+    # Check if opponent is in StunState
+    if isinstance(opponent.state, StunState):
+        base_reward = 0.05 * env.dt  # Advantage state reward
+        hitstun_bonus = (0.02 * env.dt) if opponent.damage_taken_this_frame else 0 # Tiny per-frame hitstun reward
+        return base_reward + hitstun_bonus
+    
+    return 0.0
+
+def proximity_to_opponent_reward(env: WarehouseBrawl) -> float:
+    """
+    Rewards getting close to opponent - encourages chasing and engagement.
+    Reward increases as distance decreases.
+    """
+    player: Player = env.objects["player"]
+    opponent: Player = env.objects["opponent"]
+    
+    # Calculate distance
+    dx = player.body.position.x - opponent.body.position.x
+    dy = player.body.position.y - opponent.body.position.y
+    distance = (dx**2 + dy**2)**0.5
+    
+    max_distance = 15.0  # Maximum arena distance
+    
+    # Don't reward if player is stunned
+    if isinstance(player.state, StunState):
+        return 0.0
+    
+    # Reward for being close - closer = more reward
+    # Inverse relationship: closer gets more reward
+    if distance < max_distance:
+        reward = (max_distance - distance) / max_distance
+        return reward * 0.005  # INCREASED per-frame reward
+    
+    return 0.0
+
+def weapon_stability_reward(env: WarehouseBrawl) -> float:
+    """
+    Small constant reward for having any weapon (discourages constant switching).
+    """
+    player: Player = env.objects["player"]
+    
+    # Reward for having a weapon, slightly more for better weapons
+    if player.weapon == "Hammer":
+        return 0.002
+    elif player.weapon == "Spear":
+        return 0.001
+    else:
+        return 0.0
+    
+def jumping_on_middle(env:WarehouseBrawl):
+    """
+    reward for getting on middle
+    """
+    player: Player = env.objects['player']
+    middle = env.obs_helper('player_moving_platform_pos')
+    edge_x = 2 // 2
+
+    x = player.body.position.x
+    y = player.body.position.y
+    
+    if middle[0] - edge_x < x < middle[0] + edge_x and middle[1] > y:
+        return 2.0
+    return 0.0
+
+
+
+
+
+
+
+
+
+
+def danger_zone_reward(
+    env: WarehouseBrawl,
+    zone_penalty: int = 1,
+    zone_height: float = 4.2
+) -> float:
+    """
+    Applies a penalty for every time frame player surpases a certain height threshold in the environment.
+
+    Args:
+        env (WarehouseBrawl): The game environment.
+        zone_penalty (int): The penalty applied when the player is in the danger zone.
+        zone_height (float): The height threshold defining the danger zone.
+
+    Returns:
+        float: The computed penalty as a tensor.
+    """
+    # Get player object from the environment
+    player: Player = env.objects["player"]
+
+    # Apply penalty if the player is in the danger zone
+    reward = -zone_penalty if player.body.position.y >= zone_height else 0.0
+
+    return reward * env.dt
+
+def in_state_reward(
+    env: WarehouseBrawl,
+    desired_state: Type[PlayerObjectState]=BackDashState,
+) -> float:
+    """
+    Applies a penalty for every time frame player surpases a certain height threshold in the environment.
+
+    Args:
+        env (WarehouseBrawl): The game environment.
+        zone_penalty (int): The penalty applied when the player is in the danger zone.
+        zone_height (float): The height threshold defining the danger zone.
+
+    Returns:
+        float: The computed penalty as a tensor.
+    """
+    # Get player object from the environment
+    player: Player = env.objects["player"]
+
+    # Apply penalty if the player is in the danger zone
+    reward = 1 if isinstance(player.state, desired_state) else 0.0
+
+    return reward * env.dt
+
+def holding_more_than_3_keys(
+    env: WarehouseBrawl,
+) -> float:
+
+    # Get player object from the environment
+    player: Player = env.objects["player"]
+
+    # Apply penalty if the player is holding more than 3 keys
+    a = player.cur_action
+    if (a > 0.5).sum() > 3:
+        return env.dt
+    return 0
+
+def min_speed_reward(env: WarehouseBrawl) -> float:
+    """
+    Small bonus for having some horizontal speed, 0 when already fast
+    """
+    vx = abs(env.objects["player"].body.velocity.x)
+    return min(vx, 1.0) * 0.02 * env.dt
+
+def idle_penalty(env: WarehouseBrawl) -> float:
+    """
+    Penalize player for being idle (low velocity)
+    """
+    p = env.objects["player"]
+    vx, vy = p.body.velocity.x, p.body.velocity.y
+    if abs(vx) < 0.5 and abs(vy) < 0.5:
+        return -0.1 * env.dt
+    return 0.0
+
+def no_input_penalty(env: WarehouseBrawl) -> float:
+    """
+    Punish doing nothing at all this frame
+    """
+    a = env.objects["player"].cur_action
+    return (-0.05 * env.dt) if (a <= 0.5).all() else 0.0
+
+def forward_progress_reward(env: WarehouseBrawl) -> float:
+    """
+    Always pay for moving toward opponent this frame
+    """
+    p = env.objects["player"]
+    o = env.objects["opponent"]
+    dx = p.body.position.x - p.prev_x
+    sign = 1 if p.body.position.x < o.body.position.x else -1
+    return sign * dx  # positive if moved toward, negative if moved away
+
 def time_pressure_reward(env: WarehouseBrawl) -> float:
     """
     Tiny constant per-step penalty to encourage decisive action.
@@ -782,57 +901,6 @@ def retreat_penalty(env: WarehouseBrawl) -> float:
         if not opp_in_bad_position:
             # This is a retreat, apply penalty
             return -0.01 * env.dt  # Grace window handled by small penalty
-    
-    return 0.0
-
-def advantage_state_reward(env: WarehouseBrawl) -> float:
-    """
-    Rewards opponent in hitstun + tiny per-frame hitstun reward.
-    Encourages sustained pressure.
-    """
-    player = env.objects["player"]
-    opponent = env.objects["opponent"]
-    
-    # Base reward for having opponent stunned
-    # Check if opponent is in StunState
-    if isinstance(opponent.state, StunState):
-        base_reward = 0.05 * env.dt  # Advantage state reward
-        hitstun_bonus = (0.02 * env.dt) if opponent.damage_taken_this_frame else 0 # Tiny per-frame hitstun reward
-        return base_reward + hitstun_bonus
-    
-    return 0.0
-
-def clip_reward(reward: float, min_val: float = -0.2, max_val: float = 0.2) -> float:
-    """
-    Clip per-step rewards to [-0.2, +0.2].
-    Terminal rewards are NOT clipped.
-    """
-    return max(min_val, min(max_val, reward))
-
-def proximity_to_opponent_reward(env: WarehouseBrawl) -> float:
-    """
-    Rewards getting close to opponent - encourages chasing and engagement.
-    Reward increases as distance decreases.
-    """
-    player: Player = env.objects["player"]
-    opponent: Player = env.objects["opponent"]
-    
-    # Calculate distance
-    dx = player.body.position.x - opponent.body.position.x
-    dy = player.body.position.y - opponent.body.position.y
-    distance = (dx**2 + dy**2)**0.5
-    
-    max_distance = 15.0  # Maximum arena distance
-    
-    # Don't reward if player is stunned
-    if isinstance(player.state, StunState):
-        return 0.0
-    
-    # Reward for being close - closer = more reward
-    # Inverse relationship: closer gets more reward
-    if distance < max_distance:
-        reward = (max_distance - distance) / max_distance
-        return reward * 0.005  # INCREASED per-frame reward
     
     return 0.0
 
@@ -942,35 +1010,6 @@ def survival_bonus(env: WarehouseBrawl) -> float:
     if is_onstage:
         return 0.01 * env.dt  # Small survival bonus
     
-    return 0.0
-
-def weapon_stability_reward(env: WarehouseBrawl) -> float:
-    """
-    Small constant reward for having any weapon (discourages constant switching).
-    """
-    player: Player = env.objects["player"]
-    
-    # Reward for having a weapon, slightly more for better weapons
-    if player.weapon == "Hammer":
-        return 0.002
-    elif player.weapon == "Spear":
-        return 0.001
-    else:
-        return 0.0
-    
-def jumping_on_middle(env:WarehouseBrawl):
-    """
-    reward for getting on middle
-    """
-    player: Player = env.objects['player']
-    middle = env.obs_helper('player_moving_platform_pos')
-    edge_x = 2 // 2
-
-    x = player.body.position.x
-    y = player.body.position.y
-    
-    if middle[0] - edge_x < x < middle[0] + edge_x and middle[1] > y:
-        return 2.0
     return 0.0
 
 def whichPlatform(x,y,positionMap):
