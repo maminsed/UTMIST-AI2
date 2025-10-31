@@ -19,6 +19,7 @@ import numpy as np
 import gdown
 from typing import Optional
 from gymnasium import spaces, ActionWrapper
+from stable_baselines3 import PPO
 from environment.agent import Agent
 # from stable_baselines3 import PPO, A2C # Sample RL Algo imports
 from sb3_contrib import QRDQN # Importing an LSTM
@@ -27,20 +28,23 @@ from sb3_contrib import QRDQN # Importing an LSTM
 # import ttnn
 # from user.my_agent_tt import TTMLPPolicy
 
-class DiscreteToBinary10(ActionWrapper):
+class BoxToMultiBinary10(gym.ActionWrapper):
+    """
+    Expose MultiBinary(10) to the algo, while the underlying env still accepts Box(0,1, (10,))
+    with threshold 0.5. We feed exact 0/1 floats to avoid nondifferentiable, off-policy thresholds.
+    """
     def __init__(self, env):
         super().__init__(env)
-        # Expose a Discrete action space to the algorithm
-        self.action_space = spaces.Discrete(2 ** 10)
-    @staticmethod
-    def _int_to_bits10(act_idx: int):
-        # [b9, b8, ..., b0] — match your env’s bit order as needed
-        bits = np.array([(act_idx >> i) & 1 for i in range(10)], dtype=np.float32)
-        return bits[::-1]  # reverse if your env expects MSB-first
+        self.action_space = spaces.MultiBinary(10)  # 10 buttons
 
-    def action(self, act_idx):
-        # Map Discrete -> original Box(10,)
-        return self._int_to_bits10(int(act_idx))
+    def action(self, action: np.ndarray) -> np.ndarray:
+        # PPO will give 0/1 ints for MultiBinary; convert to float for the Box env
+        # No extra thresholding needed downstream.
+        return action.astype(np.float32)
+
+    def reverse_action(self, action):
+        # Not strictly needed, but keeps interface complete
+        return (action > 0.5).astype(np.int8)
 
 
 class SubmittedAgent(Agent):
@@ -77,7 +81,7 @@ class SubmittedAgent(Agent):
             # del self.env
         else:
             # For inference: load trained model
-            self.model = QRDQN.load(self.file_path)
+            self.model = PPO.load(self.file_path)
 
         # To run the sample TTNN model during inference, you can uncomment the 5 lines below:
         # This assumes that your self.model.policy has the MLPPolicy architecture defined in `train_agent.py` or `my_agent_tt.py`
@@ -115,15 +119,13 @@ class SubmittedAgent(Agent):
         return data_path
 
     def predict(self, obs):
-        # QRDQN outputs discrete actions (0-1023) which need to be converted to Box(10) binary vector
-        act_idx, _ = self.model.predict(obs)
-        action = np.array([(act_idx >> i) & 1 for i in range(10)], dtype=np.float32)
-        return action[::-1]  # Reverse to match original action order
+        act, _ = self.model.predict(obs)
+        return act.astype(np.float32)
 
     def save(self, file_path: str) -> None:
         self.model.save(file_path)
 
     # If modifying the number of models (or training in general), modify this
     def learn(self, env, total_timesteps, log_interval: int = 4):
-        self.model.set_env(DiscreteToBinary10(env))
+        self.model.set_env(BoxToMultiBinary10(env))
         self.model.learn(total_timesteps=total_timesteps, log_interval=log_interval)

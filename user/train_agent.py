@@ -374,21 +374,24 @@ class MLPPolicy(nn.Module):
 
 
 
-class DiscreteToBinary10(gymnasium.ActionWrapper):
+class BoxToMultiBinary10(gym.ActionWrapper):
+    """
+    Expose MultiBinary(10) to the algo, while the underlying env still accepts Box(0,1, (10,))
+    with threshold 0.5. We feed exact 0/1 floats to avoid nondifferentiable, off-policy thresholds.
+    """
     def __init__(self, env):
         super().__init__(env)
-        # Expose a Discrete action space to the algorithm
-        self.action_space = spaces.Discrete(2 ** 10)
-    @staticmethod
-    def _int_to_bits10(act_idx: int) -> np.ndarray:
-        # [b9, b8, ..., b0] — match your env’s bit order as needed
-        bits = np.array([(act_idx >> i) & 1 for i in range(10)], dtype=np.float32)
-        return bits[::-1]  # reverse if your env expects MSB-first
+        self.action_space = spaces.MultiBinary(10)  # 10 buttons
 
-    def action(self, act_idx):
-        # Map Discrete -> original Box(10,)
-        return self._int_to_bits10(int(act_idx))
-  
+    def action(self, action: np.ndarray) -> np.ndarray:
+        # PPO will give 0/1 ints for MultiBinary; convert to float for the Box env
+        # No extra thresholding needed downstream.
+        return action.astype(np.float32)
+
+    def reverse_action(self, action):
+        # Not strictly needed, but keeps interface complete
+        return (action > 0.5).astype(np.int8)
+
 class MLPWithLayerNorm(BaseFeaturesExtractor):
     def __init__(self, observation_space:gym.Space, features_dim:int = 256):
         super().__init__(observation_space, features_dim)
@@ -409,14 +412,14 @@ class MLPWithLayerNorm(BaseFeaturesExtractor):
         return self.model(obs)
 
 class CustomAgent(Agent):
-    def __init__(self, sb3_class: Optional[Type[BaseAlgorithm]]=QRDQN, file_path: str = None, extractor: BaseFeaturesExtractor = None):
+    def __init__(self, sb3_class: Optional[Type[BaseAlgorithm]]=PPO, file_path: str = None, extractor: BaseFeaturesExtractor = None):
         self.sb3_class = sb3_class
         self.extractor = extractor
         super().__init__(file_path)
 
     
     def _initialize(self) -> None:
-        print("initializing QRDQN network: uwu")
+        print("initializing PPO network: uwu")
         print(type(self.env.action_space))
         if self.file_path is None:
             # Set device for GPU training
@@ -424,20 +427,22 @@ class CustomAgent(Agent):
             print(f"Using device: {device}")
             
             policy_kwargs=dict(
-                n_quantiles=50,
                 features_extractor_class=MLPWithLayerNorm,
                 features_extractor_kwargs=dict(features_dim=256)
             )
             self.model = self.sb3_class(
                 "MlpPolicy", 
                     self.env, 
-                    buffer_size=400_000,
-                    learning_starts=2_000,
-                    batch_size=256,
-                    gamma=0.99,
-                    train_freq=8,
-                    target_update_interval=8_000, #TODO: try with 4_000 if you see spikes later in training
-                    exploration_fraction=0.5, # TODO: EXPERIMENT: 0.5 - 0.2 
+                    n_steps=2048,          # rollout length per update
+                    batch_size=256,        # minibatch size
+                    n_epochs=10,           # updates per batch
+                    gamma=0.995,
+                    gae_lambda=0.95,
+                    clip_range=0.2,
+                    ent_coef=0.01,         # encourage button exploration
+                    vf_coef=0.5,
+                    max_grad_norm=0.5,
+                    learning_rate=3e-4,
                     verbose=0,
                     policy_kwargs=policy_kwargs,
                     device=device,  # Use GPU if available
@@ -454,15 +459,14 @@ class CustomAgent(Agent):
         #self.model.set_ignore_act_grad(True)
 
     def predict(self, obs):
-        act_idx, _ = self.model.predict(obs)
-        action = np.array([(act_idx >> i) & 1 for i in range(10)], dtype=np.float32)
-        return action[::-1]
+        act, _ = self.model.predict(obs)
+        return act.astype(np.float32)
 
     def save(self, file_path: str) -> None:
         self.model.save(file_path, include=['num_timesteps'])
 
     def learn(self, env, total_timesteps, log_interval: int = 1, verbose=0):
-        self.model.set_env(DiscreteToBinary10(env))
+        self.model.set_env(BoxToMultiBinary10(env))
         self.model.verbose = verbose
         self.model.learn(
             total_timesteps=total_timesteps,
@@ -549,23 +553,24 @@ def clip_reward(reward: float, min_val: float = -0.2, max_val: float = 0.2) -> f
     """
     return max(min_val, min(max_val, reward))
 
+def phi_distance(p_x,p_y,o_x,o_y):
+    dx, dy = p_x - o_x, p_y - o_y
+    dist = (dx*dx + dy*dy) ** 0.5
+    return -dist
+
 def head_to_opponent(
     env: WarehouseBrawl,
 ) -> float:
+    player = env.objects['player']
+    opponent = env.objects['opponent']
+    currDist = phi_distance(player.body.position.x, player.body.position.y,opponent.body.position.x,opponent.body.position.y)
+    prevDist = phi_distance(player.prev_x, player.prev_y,opponent.prev_x,opponent.prev_y)
 
-    # Get player object from the environment
-    player: Player = env.objects["player"]
-    opponent: Player = env.objects["opponent"]
-
-    # Apply penalty if the player is in the danger zone
-    multiplier = -1 if player.body.position.x > opponent.body.position.x else 1
-    reward = clip_reward(multiplier * env.dt * (player.body.position.x - player.prev_x),-1,1)
-
-    return reward
+    return  env.dt * clip_reward(currDist - prevDist,-1,1)
 
 def on_win_reward(env: WarehouseBrawl, agent: str) -> float:
     #favouring early wins and penilizing early looses
-    multipier = clip_reward(100/ max(env.steps, 1),0.5,2.5)
+    multipier = max(100/ max(env.steps, 1),1)
     if agent == 'player':
         return multipier
     else:
@@ -615,29 +620,9 @@ def on_drop_reward(env: WarehouseBrawl, agent: str) -> float:
 def on_combo_reward(env: WarehouseBrawl, agent: str) -> float:
     """Reward per EXTRA hit after the first - prevents dwarfing KO credit"""
     if agent == 'player':
-        return 0.05  # Per extra hit, scaled by weight
+        return env.dt * 0.05  # Per extra hit, scaled by weight
     else:
-        return -0.05
-
-def edge_to_ko_bonus(env: WarehouseBrawl, agent: str) -> float:
-    """Bonus for converting edge hits into KOs within 2 seconds"""
-    if agent != 'player':
-        return 0.0
-    
-    player = env.objects["player"]
-    opponent = env.objects["opponent"]
-    
-    # Check if opponent was near edge (within 3 units) when KO'd
-    edge_x = env.stage_width_tiles // 2
-    opponent_dist_to_left = abs(opponent.body.position.x + edge_x)
-    opponent_dist_to_right = abs(opponent.body.position.x - edge_x)
-    min_edge_dist = min(opponent_dist_to_left, opponent_dist_to_right)
-    
-    # Bonus if opponent was near edge when KO'd
-    if min_edge_dist < 3.0:
-        return 8.0
-    
-    return 0.0
+        return env.dt * -0.05
 
 def whiff_punishment_reward(env: WarehouseBrawl) -> float:
     """
@@ -651,29 +636,18 @@ def whiff_punishment_reward(env: WarehouseBrawl) -> float:
     dx = player.body.position.x - opponent.body.position.x
     dy = player.body.position.y - opponent.body.position.y
     distance = (dx**2 + dy**2)**0.5
+    vx,vy = player.body.velocity.x-opponent.body.velocity.x, player.body.velocity.y-opponent.body.velocity.y
+
+    closing = (dx*vx+dy*vy) < 0
     
-    threat_range = 3.0
-    far_range = 5.0
+    far = min(distance/6.0,1.5)
+    attacking = hasattr(player.state, 'move_type') and player.state.move_type not in [MoveType.NONE,MoveType.RECOVERY] 
+    whiff = 0
+    if not whiff or not attacking:
+        return 0.0
     
-    # Check if player is attacking
-    if hasattr(player.state, 'move_type') and player.state.move_type not in [MoveType.NONE,MoveType.RECOVERY] and opponent.damage_taken_this_frame == 0:
-        # STRONGER penalty if attacking when opponent is far away
-        if distance > far_range:
-            return -0.15  # Heavy penalty for attacking air when far
-        elif distance > threat_range:
-            return -0.08  # Medium penalty for attacking outside threat range
-        elif distance < threat_range:
-            # Classify as heavy or light whiff in range
-            is_heavy = player.state.move_type in [
-                MoveType.NSIG, MoveType.DSIG, MoveType.SSIG, MoveType.GROUNDPOUND
-            ]
-            
-            if is_heavy:
-                return -0.05  # INCREASED: Heavy whiff in range
-            else:
-                return -0.01  # INCREASED: Light whiff in range
-    
-    return 0.0
+    not_closing = 1.0 if not closing else 0.4
+    return clip_reward(-0.03 * env.dt * far * not_closing,-1,1)
 
 def advantage_state_reward(env: WarehouseBrawl) -> float:
     """
@@ -726,10 +700,8 @@ def weapon_stability_reward(env: WarehouseBrawl) -> float:
     player: Player = env.objects["player"]
     
     # Reward for having a weapon, slightly more for better weapons
-    if player.weapon == "Hammer":
-        return 0.002
-    elif player.weapon == "Spear":
-        return 0.001
+    if player.weapon in ["Hammer", "Spear"]:
+        return env.dt * 0.001
     else:
         return 0.0
     
@@ -749,7 +721,7 @@ def jumping_on_middle(env:WarehouseBrawl):
     y = player.body.position.y
     
     if platform_x - edge_x < x < platform_x + edge_x and platform_y > y:
-        return 2.0 * env.dt
+        return 0.5 * env.dt
     return 0.0
 
 
@@ -758,6 +730,25 @@ def jumping_on_middle(env:WarehouseBrawl):
 
 
 
+def edge_to_ko_bonus(env: WarehouseBrawl, agent: str) -> float:
+    """Bonus for converting edge hits into KOs within 2 seconds"""
+    if agent != 'player':
+        return 0.0
+    
+    player = env.objects["player"]
+    opponent = env.objects["opponent"]
+    
+    # Check if opponent was near edge (within 3 units) when KO'd
+    edge_x = env.stage_width_tiles // 2
+    opponent_dist_to_left = abs(opponent.body.position.x + edge_x)
+    opponent_dist_to_right = abs(opponent.body.position.x - edge_x)
+    min_edge_dist = min(opponent_dist_to_left, opponent_dist_to_right)
+    
+    # Bonus if opponent was near edge when KO'd
+    if min_edge_dist < 3.0:
+        return 8.0
+    
+    return 0.0
 
 def head_to_middle_reward(
     env: WarehouseBrawl,
@@ -1179,7 +1170,7 @@ if __name__ == '__main__':
     # my_agent = CustomAgent(sb3_class=QRDQN, extractor=MLPExtractor)
     
     # OR: Continue from checkpoint (only if you want to try adapting old behavior):
-    my_agent = CustomAgent(sb3_class=QRDQN, file_path='checkpoints/num2/rl_model_800000_steps.zip', extractor=MLPExtractor)
+    my_agent = CustomAgent(sb3_class=PPO, file_path='checkpoints/num2/rl_model_800000_steps.zip', extractor=MLPExtractor)
 
     # Start here if you want to train from scratch. e.g:
     #my_agent = RecurrentPPOAgent()
@@ -1196,14 +1187,14 @@ if __name__ == '__main__':
     selfplay_random = SelfPlayRandom(
         partial(type(my_agent))
     )
-
+    
     # Set save settings here:
     save_handler = SaveHandler(
         agent=my_agent, # Agent to save
         save_freq=50_000, # Save frequency - more frequent to catch good models
         max_saved=40, # Maximum number of saved models
         save_path='checkpoints', # Save path
-        run_name='experiment_run_QRDQN',  # Fresh training with aggressive chase + no whiffs
+        run_name='experiment_run_PPO_IM_DUMB_AF',  # Fresh training with aggressive chase + no whiffs
         mode=SaveHandlerMode.RESUME  # Start completely fresh
     )
 
