@@ -644,8 +644,8 @@ def whiff_punishment_reward(env: WarehouseBrawl) -> float:
     
     far = min(distance/6.0,1.5)
     attacking = hasattr(player.state, 'move_type') and player.state.move_type not in [MoveType.NONE,MoveType.RECOVERY] 
-    whiff = 0
-    if not whiff or not attacking:
+    whiff = not hasattr(player, 'damage_taken_this_frame') or player.damage_taken_this_frame == 0
+    if not attacking or not whiff:
         return 0.0
     
     not_closing = 1.0 if not closing else 0.4
@@ -728,7 +728,7 @@ def jumping_on_middle(env:WarehouseBrawl):
 
 def no_input_penalty(env: WarehouseBrawl) -> float:
     """
-    Punish doing nothing at all this frame
+    Punishes for not moving too much
     """
     player = env.objects["player"]
     x = player.body.position.x
@@ -736,7 +736,9 @@ def no_input_penalty(env: WarehouseBrawl) -> float:
     prev_x = player.prev_x
     prev_y = player.prev_y
     dist = (x-prev_x)**2 + (y-prev_y) ** 2
-    return clip_reward(env.dt * (dist/2 if dist > 1.0 else -1.0),-0.5,0.5)
+    if dist > 0.1:
+        return min(dist * 0.1,0.5) * env.dt
+    return -0.1 * env.dt 
 
 state_mapping = [
     'WalkingState',
@@ -1120,7 +1122,7 @@ def gen_reward_manager(numCheckpoint:int):
             'on_knockout_reward': 80,
             'on_combo_reward': 0.0,
             'on_equip_reward': 0.1,
-            'on_drop_reward': 0.001
+            'on_drop_reward': 0.08
         },
         3: {
             'damage_interaction_reward': 15.0,
@@ -1134,7 +1136,7 @@ def gen_reward_manager(numCheckpoint:int):
             'on_knockout_reward': 80,
             'on_combo_reward': 0.0,
             'on_equip_reward': 0.1,
-            'on_drop_reward': 0.0099
+            'on_drop_reward': 0.001
         }
     }
 
@@ -1151,11 +1153,11 @@ def gen_reward_manager(numCheckpoint:int):
         'weapon_stability_reward': RewTerm(func=weapon_stability_reward, weight=currCheckPoint.get('weapon_stability_reward', 0.0)), #checkpoint 2
         
         # encourage running at opponent especially for start to get more useful data
-        'proximity_to_opponent_reward': RewTerm(func=proximity_to_opponent_reward, weight=currCheckPoint['proximity_to_opponent_reward']), 
+        # 'proximity_to_opponent_reward': RewTerm(func=proximity_to_opponent_reward, weight=currCheckPoint['proximity_to_opponent_reward']), 
         'head_to_opponent': RewTerm(func=head_to_opponent, weight=currCheckPoint['head_to_opponent']), 
         'jumping_on_middle': RewTerm(func=jumping_on_middle, weight=currCheckPoint['jumping_on_middle']), # checkpoint-driven weights
         'no_input_penalty': RewTerm(func=no_input_penalty, weight=currCheckPoint.get('no_input_penalty',0.0)),
-        'bad_taunt': RewTerm(func=no_input_penalty, weight=currCheckPoint.get('bad_taunt',0.0)),
+        'bad_taunt': RewTerm(func=bad_taunt, weight=currCheckPoint.get('bad_taunt',0.0)),
         # Keep these disabled/zero
         # 'stage_control': RewTerm(func=stage_control, weight=currCheckPoint.get('stage_control', 0.0))
         # 'time_pressure_reward': RewTerm(func=time_pressure_reward, weight=currCheckPoint.get('time_pressure_reward', 0.0)),
@@ -1229,34 +1231,34 @@ if __name__ == '__main__':
 
     # Set opponent settings here:
     opponent_spec0 = {
-                    'self_play': (3, selfplay_handler),
+                    'self_play': (6, selfplay_handler),
                     'self_play_random': (0,selfplay_random),
-                    'constant_agent': (7, partial(ConstantAgent)),
+                    'constant_agent': (14, partial(ConstantAgent)),
                     'easy_hard_coded_bot': (0, partial(EasyHardCodedBot)),
                     'hard_hard_coded_bot': (0,partial(HardHardCodedBot))
                 }
     
     opponent_spec1 = {
-        'self_play': (4, selfplay_handler),
+        'self_play': (9, selfplay_handler),
         'self_play_random': (2,selfplay_random),
-        'constant_agent': (1, partial(ConstantAgent)),
-        'easy_hard_coded_bot': (3, partial(EasyHardCodedBot)),
+        'constant_agent': (0, partial(ConstantAgent)),
+        'easy_hard_coded_bot': (9, partial(EasyHardCodedBot)),
         'hard_hard_coded_bot': (0,partial(HardHardCodedBot))
     }   
 
     opponent_spec2 = {
-        'self_play': (5, selfplay_handler),
+        'self_play': (10, selfplay_handler),
         'self_play_random': (2,selfplay_random),
         'constant_agent': (0, partial(ConstantAgent)),
-        'easy_hard_coded_bot': (2, partial(EasyHardCodedBot)),
+        'easy_hard_coded_bot': (7, partial(EasyHardCodedBot)),
         'hard_hard_coded_bot': (1,partial(HardHardCodedBot))
     }
 
     opponent_spec3 = {
-        'self_play': (6, selfplay_handler),
+        'self_play': (12, selfplay_handler),
         'constant_agent': (0, partial(ConstantAgent)),
-        'easy_hard_coded_bot': (1, partial(EasyHardCodedBot)),
-        'hard_hard_coded_bot': (3,partial(HardHardCodedBot))
+        'easy_hard_coded_bot': (0, partial(EasyHardCodedBot)),
+        'hard_hard_coded_bot': (8,partial(HardHardCodedBot))
     }
     
     
