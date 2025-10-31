@@ -47,11 +47,11 @@ class SubmittedAgent(Agent):
         opp_pos = self.obs_helper.get_section(obs, 'opponent_pos')
         opp_KO = self.obs_helper.get_section(obs, 'opponent_state') in [5, 11]
         action = self.act_helper.zeros()
+        facing = self.obs_helper.get_section(obs, 'player_facing')
 
         if self.prev_pos is not None:
-            self.down = (pos[1] - self.prev_pos[1]) > 0.00
-        else:
-            self.prev_pos = pos
+            self.down = (pos[1] - self.prev_pos[1]) > 0
+        self.prev_pos = pos
 
         self.recover = False
         if pos[0] < -6.9:
@@ -68,13 +68,25 @@ class SubmittedAgent(Agent):
             self.recover = True
 
         # Jump if falling
-        if self.down and self.time % 11 == 0 and self.recover:
+        if self.down or self.obs_helper.get_section(obs, 'player_grounded') == 1:
+            '''
             if self.obs_helper.get_section(obs, "player_recoveries_left") > 0:
                 action = self.act_helper.press_keys(['k'], action)
             else:
                 action = self.act_helper.press_keys(['space'], action)
+            '''
+            if self.time % 10 == 0:
+                action = self.act_helper.press_keys(['space'], action)
 
+        
+        if not self.recover:
+            if opp_pos[0] > pos[0] and facing == 0:
+                action = self.act_helper.press_keys(['d'], action)
+            elif opp_pos[0] < pos[0] and facing == 1:
+                action = self.act_helper.press_keys(['a'], action)
+        
+                
         # Attack if near
-        if (pos[0] - opp_pos[0])**2 + (pos[1] - opp_pos[1])**2 < 4.0:
+        if not self.recover and (pos[0] - opp_pos[0])**2 + (pos[1] - opp_pos[1])**2 < 4.0:
             action = self.act_helper.press_keys(['j'], action)
         return action

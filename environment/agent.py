@@ -1048,7 +1048,7 @@ def train(agent: Agent,
 import pygame
 from pygame.locals import QUIT
 
-def run_real_time_match(agent_1: UserInputAgent, agent_2: Agent, max_timesteps=30*90, resolution=CameraResolution.LOW):
+def run_real_time_match(agent_1: Agent, agent_2: Agent, max_timesteps=30*90, resolution=CameraResolution.HIGH):
     pygame.init()
 
     pygame.mixer.init()
