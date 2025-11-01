@@ -836,7 +836,7 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
 
     BRAWL_TO_UNITS = 1.024 / 320  # Conversion factor
 
-    def __init__(self, mode: RenderMode=RenderMode.RGB_ARRAY, resolution: CameraResolution=CameraResolution.LOW, train_mode: bool = False):
+    def __init__(self, mode: RenderMode=RenderMode.RGB_ARRAY, resolution: CameraResolution=CameraResolution.LOW, train_mode: bool = False,spawners=True):
         super(WarehouseBrawl, self).__init__()
 
         self.game_mode: GameMode = GameMode.STANDARD
@@ -890,7 +890,7 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
         
         self.load_attacks()
 
-        self.reset()
+        self.reset(spawners=spawners)
 
     def get_observation_space(self):
         # lowarray = np.array(
@@ -1128,7 +1128,7 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
         # Not really in use
         self.rewards[agent] += reward
 
-    def reset(self, seed=None) -> Tuple[dict[int, np.ndarray], dict[str, Any]]:
+    def reset(self, seed=None,spawners=True) -> Tuple[dict[int, np.ndarray], dict[str, Any]]:
         self.seed = seed
         self.space = pymunk.Space()
         self.dt = 1 / 30.0
@@ -1145,7 +1145,7 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
         self.players: list[Player] = []
         self.camera.reset(self)
         self.camera.scale_background(self)
-        self._setup()
+        self._setup(spawners=spawners)
 
         return {agent: self.observe(agent) for agent in self.agents}, {}
 
@@ -1275,7 +1275,7 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
                 spawners.append(["Random", s.world_pos])
         return spawners
 
-    def _setup(self):
+    def _setup(self,spawners=True):
         # Collision fix - prevent players from colliding with each other
        
         handler = self.space.add_collision_handler(PLAYER, PLAYER + 1)
@@ -1338,9 +1338,9 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
 
         self.weapon_pool = WeaponPool(self.weapon_images)
         self.weapon_spawners = []
-        
-        self.weapon_spawners.append(WeaponSpawner(self.camera, 0, self, self.weapon_pool, pos=[random.uniform(2.6,6.5), 0+0.7], cooldown_frames=random.randint(500,700), despawn_frames=350))
-        self.weapon_spawners.append(WeaponSpawner(self.camera, 1, self, self.weapon_pool, pos=[-random.uniform(2.6,6.5), 2+0.7], cooldown_frames=random.randint(500,700), despawn_frames=350))
+        if spawners:
+            self.weapon_spawners.append(WeaponSpawner(self.camera, 0, self, self.weapon_pool, pos=[random.uniform(2.6,6.5), 0+0.7], cooldown_frames=random.randint(500,700), despawn_frames=350))
+            self.weapon_spawners.append(WeaponSpawner(self.camera, 1, self, self.weapon_pool, pos=[-random.uniform(2.6,6.5), 2+0.7], cooldown_frames=random.randint(500,700), despawn_frames=350))
           
         self.weapon_controller = WeaponSpawnController(self.weapon_spawners)
 

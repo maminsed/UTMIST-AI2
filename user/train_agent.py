@@ -1279,6 +1279,9 @@ if __name__ == '__main__':
         for i in range(4):
             with open("progress_report.py", "w") as f:
                 f.write(f"currently at checkpoint: {i}")
+            spawners = False
+            if i >= 2:
+                spawners = True
             # Reward manager
             reward_manager = gen_reward_manager(i)
 
@@ -1290,7 +1293,8 @@ if __name__ == '__main__':
                 opponent_cfg,
                 CameraResolution.LOW,
                 train_timesteps=int(timeStepDict[i]),  # Continue training (total 15M from start)
-                train_logging=TrainLogging.PLOT
+                train_logging=TrainLogging.PLOT,
+                spawners=spawners
             )
     elif state == 'rightnow':
         RUN = 0

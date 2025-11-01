@@ -480,7 +480,8 @@ class SelfPlayWarehouseBrawl(gymnasium.Env):
                  opponent_cfg: OpponentsCfg=OpponentsCfg(),
                  save_handler: Optional[SaveHandler]=None,
                  render_every: int | None = None,
-                 resolution: CameraResolution=CameraResolution.LOW):
+                 resolution: CameraResolution=CameraResolution.LOW,
+                 spawners=True):
         """
         Initializes the environment.
 
@@ -515,7 +516,7 @@ class SelfPlayWarehouseBrawl(gymnasium.Env):
                 selfplay_handler.save_handler = self.save_handler
                 selfplay_handler.env = self       
 
-        self.raw_env = WarehouseBrawl(resolution=resolution, train_mode=True)
+        self.raw_env = WarehouseBrawl(resolution=resolution, train_mode=True,spawners=spawners)
         self.action_space = self.raw_env.action_space
         self.act_helper = self.raw_env.act_helper
         self.observation_space = self.raw_env.observation_space
@@ -694,6 +695,26 @@ def run_match(agent_1: Agent | partial,
 
     return match_stats
 
+
+class DoNotFallAgent(Agent):
+    def __init__(
+            self,
+            *args,
+            **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+
+    def predict(self, obs):
+        pos = self.obs_helper.get_section(obs, 'player_pos')
+        if pos[0] < -6.9:
+            action = self.act_helper.press_keys(['d','space'], action)
+        elif pos[0] > -1.9 and pos[0] < 0:
+            action = self.act_helper.press_keys(['a','space'], action)
+        elif pos[0] > 0 and pos[0] < 1.9:
+            action = self.act_helper.press_keys(['d','space'], action)
+        elif pos[0] > 6.9:
+            action = self.act_helper.press_keys(['a','space'], action)
+        return action
 
 class ConstantAgent(Agent):
 
@@ -1005,13 +1026,15 @@ def train(agent: Agent,
           opponent_cfg: OpponentsCfg=OpponentsCfg(),
           resolution: CameraResolution=CameraResolution.LOW,
           train_timesteps: int=400_000,
-          train_logging: TrainLogging=TrainLogging.PLOT
+          train_logging: TrainLogging=TrainLogging.PLOT,
+          spawners=True
           ):
     # Create environment
     env = SelfPlayWarehouseBrawl(reward_manager=reward_manager,
                                  opponent_cfg=opponent_cfg,
                                  save_handler=save_handler,
-                                 resolution=resolution
+                                 resolution=resolution,
+                                 spawners=spawners,
                                  )
     reward_manager.subscribe_signals(env.raw_env)
     if train_logging != TrainLogging.NONE:
