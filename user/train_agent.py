@@ -434,9 +434,9 @@ class CustomAgent(Agent):
             self.model = self.sb3_class(
                 "MlpPolicy", 
                     wrapped_env, 
-                    n_steps=1024,          # rollout length per update
-                    batch_size=128,        # minibatch size (2048 disables minibatching!)
-                    n_epochs=4,       # updates per batch
+                    n_steps=2048,          # rollout length per update
+                    batch_size=512,        # minibatch size (2048 disables minibatching!)
+                    n_epochs=10,       # updates per batch
                     gamma=0.995,
                     gae_lambda=0.95,
                     clip_range=0.2,
@@ -468,10 +468,10 @@ class CustomAgent(Agent):
 
     def learn(self, env, total_timesteps, log_interval: int = 1, verbose=0):
         self.model.set_env(BoxToMultiBinary10(env))
-        self.model.verbose = verbose
         self.model.learn(
             total_timesteps=total_timesteps,
             log_interval=log_interval,
+            progress_bar=False
         )
 
 # --------------------------------------------------------------------------------
@@ -758,12 +758,11 @@ state_mapping = [
     'TauntState',
 ]
 
-def bad_taunt(env: BoxToMultiBinary10) -> float:
-    unwrapped: WarehouseBrawl = env.unwrapped
-    player_move = unwrapped.obs_helper("player_move_types")
-    if state_mapping[player_move[0]] == 'TauntState':
+def bad_taunt(env: WarehouseBrawl) -> float:
+    player = env.objects['player']
+    # Check if player is in TauntState
+    if isinstance(player.state, TauntState):
         return clip_reward(-1.0 * env.dt)
-
     return 0.0
 
 
@@ -1207,7 +1206,7 @@ if __name__ == '__main__':
     
     # OR: Continue from checkpoint (only if you want to try adapting old behavior):
     # my_agent = CustomAgent(sb3_class=PPO, file_path="checkpoints/AMIN_DUMB_AF_2/rl_model_501760_steps.zip", extractor=MLPWithLayerNorm)
-    my_agent = CustomAgent(sb3_class=PPO, file_path=None, extractor=MLPWithLayerNorm)
+    my_agent = CustomAgent(sb3_class=PPO, file_path="checkpoints/AMIN_DUMB_AF_6/rl_model_2000896_steps.zip", extractor=MLPWithLayerNorm)
 
     # Start here if you want to train from scratch. e.g:
     #my_agent = RecurrentPPOAgent()
@@ -1231,7 +1230,7 @@ if __name__ == '__main__':
         save_freq=200_000, # Save frequency - more frequent to catch good models
         max_saved=40, # Maximum number of saved models
         save_path='checkpoints', # Save path
-        run_name='AMIN_DUMB_AF_6',  # Fresh training with aggressive chase + no whiffs
+        run_name='AMIN_DUMB_AF_7',  # Fresh training with aggressive chase + no whiffs
         mode=SaveHandlerMode.RESUME  # Start completely fresh
     )
 
@@ -1274,7 +1273,7 @@ if __name__ == '__main__':
         3: 1_000_000,
     }
     #overnight or rightnow
-    state = 'rightnow' 
+    state = 'overnight' 
     if state == 'overnight':
         for i in range(4):
             with open("progress_report.py", "w") as f:
