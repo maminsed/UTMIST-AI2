@@ -529,8 +529,8 @@ def damage_interaction_reward(
     opponent: Player = env.objects["opponent"]
 
     # Reward dependent on the mode
-    damage_taken = player.damage_taken_this_frame
-    damage_dealt = opponent.damage_taken_this_frame
+    damage_taken = getattr(player,'damage_taken_this_frame',0.0)
+    damage_dealt = getattr(opponent,'damage_taken_this_frame',0.0)
 
     if mode == RewardMode.ASYMMETRIC_OFFENSIVE:
         reward = damage_dealt
@@ -564,13 +564,16 @@ def head_to_opponent(
 ) -> float:
     player = env.objects['player']
     opponent = env.objects['opponent']
+    opp_curr_x = opponent.body.position.x
 
     curr = (player.body.position.x - opponent.body.position.x) ** 2 + (player.body.position.y - opponent.body.position.y) ** 2
     prev = (player.prev_x - opponent.prev_x) ** 2 + (player.prev_y - opponent.prev_y) ** 2
 
-    eps = 1e-6
+    if curr < 2.0:
+        return 0.3 * env.dt
+    if opp_curr_x < -6.9 or opp_curr_x > 6.9: #don't follow if outside
+        return 0.0
     combined = np.tanh(prev - curr)
-
     return env.dt * combined
 
 def on_win_reward(env: WarehouseBrawl, agent: str) -> float:
@@ -732,15 +735,15 @@ def no_input_penalty(env: WarehouseBrawl) -> float:
     """
     Punishes for not moving too much
     """
-    player = env.objects["player"]
+    player:Player = env.objects["player"]
     x = player.body.position.x
     y = player.body.position.y
     prev_x = player.prev_x
     prev_y = player.prev_y
     dist = (x-prev_x)**2 + (y-prev_y) ** 2
-    if dist < 0.1:
-        return -0.1 * env.dt 
-    return 0.0
+    if player.state == InAirState or dist >= 0.0003:
+        return 0
+    return -0.1 * env.dt
 
 state_mapping = [
     'WalkingState',
@@ -1083,16 +1086,16 @@ def gen_reward_manager(numCheckpoint:int):
     checkPointDict = {
         #move to opponent 500k
         0:{
-            'damage_interaction_reward': 0.0,
+            'damage_interaction_reward': 0.001, #so that if theyre hitting someone we don't want no-inupt-penalty
             'advantage_state_reward': 0.0,
             'whiff_punishment_reward': 0.0,
             'weapon_stability_reward': 0.0,
             'head_to_opponent': 2.0,
-            'jumping_on_middle': 0.8,
+            'jumping_on_middle': 1.5,
             'bad_taunt': 0.0,
-            'no_input_penalty': 0.8,
+            'no_input_penalty': 0.5,
             'on_win_reward': 0.0,
-            'on_knockout_reward': 3.0,#It doesn't jump off
+            'on_knockout_reward': 5.0,#It doesn't jump off
             'on_combo_reward': 0.0,
             'on_equip_reward': 0.0,
             'on_drop_reward': 0.0
@@ -1103,44 +1106,47 @@ def gen_reward_manager(numCheckpoint:int):
             'advantage_state_reward': 0.0,
             'whiff_punishment_reward': 2.0,
             'weapon_stability_reward': 0.0,
-            'head_to_opponent': 2.5,
+            'head_to_opponent': 1.0,
             'jumping_on_middle': 1.0,
-            'bad_taunt': 0.5,
-            'no_input_penalty': 1.0,
-            'on_win_reward': 4.0,
-            'on_knockout_reward': 3.0,
+            'bad_taunt': 0.005,
+            'no_input_penalty': 0.4,
+            'on_win_reward': 7.0,
+            'on_knockout_reward': 6.0,
             'on_combo_reward': 0.0,
             'on_equip_reward': 0.0,
             'on_drop_reward': 0.0,
         },
         # learn to use weapons: 500k - make sure to turn on weapons
         2: {
-            'damage_interaction_reward': 2.5,
-            'advantage_state_reward': 0.5,
+            'damage_interaction_reward': 3.0,
+            'advantage_state_reward': 0.0,
             'whiff_punishment_reward': 2.5,
-            'weapon_stability_reward': 2.0,
-            'head_to_opponent': 1.5,
-            'jumping_on_middle': 0.5,
-            'no_input_penalty': 1.5,
-            'on_win_reward': 4.0,
-            'on_knockout_reward': 3.0,
-            'on_combo_reward': 0.5,
-            'on_equip_reward': 1.5,
-            'on_drop_reward': 1.4,
+            'weapon_stability_reward': 0.1,
+            'head_to_opponent': 2.0,
+            'jumping_on_middle': 1.0,
+            'bad_taunt': 0.0,
+            'no_input_penalty': 0.2,
+            'on_win_reward': 8.0,
+            'on_knockout_reward': 7.0,
+            'on_combo_reward': 0.0,
+            'on_equip_reward': 2.0,
+            'on_drop_reward': 1.99,
         }, 
         #advance moves: 1m
         3: {
-            'damage_interaction_reward': 2.5,
-            'advantage_state_reward': 1.0,
-            'whiff_punishment_reward': 2.0,
-            'weapon_stability_reward': 1.0,
-            'head_to_opponent': 0.5,
-            'jumping_on_middle': 0.1,
-            'on_win_reward': 4.5,
-            'on_knockout_reward': 3.5,
-            'on_combo_reward': 1.0,
-            'on_equip_reward': 0.5,
-            'on_drop_reward': 0.4,
+            'damage_interaction_reward': 3.0,
+            'advantage_state_reward': 0.0,
+            'whiff_punishment_reward': 2.6,
+            'weapon_stability_reward': 0.01,
+            'head_to_opponent': 0.8,
+            'jumping_on_middle': 0.4,
+            'bad_taunt': 0.0,
+            'no_input_penalty': 0.3,
+            'on_win_reward': 8.5,
+            'on_knockout_reward': 7.5,
+            'on_combo_reward': 2.0,
+            'on_equip_reward': 1.0,
+            'on_drop_reward': 0.8,
         }
     }
 
@@ -1241,15 +1247,15 @@ if __name__ == '__main__':
                 }
     
     opponent_spec1 = {
-                    'self_play': (8, selfplay_handler),
-                    'do_not_fall_agent': (8, partial(DoNotFallAgent)),
+                    'self_play': (10, selfplay_handler),
+                    'do_not_fall_agent': (6, partial(DoNotFallAgent)),
                     'easy_hard_coded_bot': (4, partial(EasyHardCodedBot)),
                 }
     
     
     opponent_spec2 = {
-        'self_play': (9, selfplay_handler),
-        'easy_hard_coded_bot': (9, partial(EasyHardCodedBot)),
+        'self_play': (15, selfplay_handler),
+        'easy_hard_coded_bot': (5, partial(EasyHardCodedBot)),
     }   
 
     opponent_spec3 = {
@@ -1261,9 +1267,9 @@ if __name__ == '__main__':
     
     opponent_specDict = {
         0: opponent_spec0,
-        1:opponent_spec1,
-        2:opponent_spec2,
-        3:opponent_spec3,
+        1: opponent_spec1,
+        2: opponent_spec2,
+        3: opponent_spec3,
     }
 
     timeStepDict = {
