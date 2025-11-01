@@ -562,10 +562,28 @@ def head_to_opponent(
 ) -> float:
     player = env.objects['player']
     opponent = env.objects['opponent']
-    curr = phi_distance(player.body.position.x, player.body.position.y,opponent.body.position.x,opponent.body.position.y)
-    prev = phi_distance(player.prev_x, player.prev_y,opponent.prev_x,opponent.prev_y)
-    frac_progress = (prev - curr) / max(prev, 1e-6)
-    shaped = np.tanh(5.0 * frac_progress)
+
+    # current absolute separations
+    curr_dx = abs(player.body.position.x - opponent.body.position.x)
+    curr_dy = abs(player.body.position.y - opponent.body.position.y)
+
+    # previous absolute separations (use prev positions stored on objects)
+    prev_dx = abs(player.prev_x - opponent.prev_x)
+    prev_dy = abs(player.prev_y - opponent.prev_y)
+
+    eps = 1e-6
+    # fractional progress for each axis: positive when closing, negative when opening
+    frac_x = (prev_dx - curr_dx) / max(prev_dx, eps)
+    frac_y = (prev_dy - curr_dy) / max(prev_dy, eps)
+
+    # weight horizontal closing more than vertical
+    w_x, w_y = 0.7, 0.3
+
+    combined = w_x * frac_x + w_y * frac_y
+
+    # shape and scale the signal
+    shaped = np.tanh(5.0 * combined)
+
     return env.dt * shaped
 
 def on_win_reward(env: WarehouseBrawl, agent: str) -> float:
@@ -1077,6 +1095,13 @@ def stage_control(env:WarehouseBrawl):
 Add your dictionary of RewardFunctions here using RewTerms
 '''
 def gen_reward_manager(numCheckpoint:int):
+    """
+    0: 2_000_000,
+    0.5: 4_000_000,
+    1: 2_000_000,
+    2: 6_000_000,
+    3: 10_000_000,
+    """
     checkPointDict = {
         0:{
             'damage_interaction_reward': 0.0,
@@ -1084,12 +1109,12 @@ def gen_reward_manager(numCheckpoint:int):
             'whiff_punishment_reward': 0.0,
             'weapon_stability_reward': 0.0,
             # 'proximity_to_opponent_reward': 2.0,
-            'head_to_opponent': 8.0,
-            'jumping_on_middle': 0.0,
+            'head_to_opponent': 10.0,
+            'jumping_on_middle': 1.0,
             'bad_taunt': 0.0,
             'no_input_penalty': 0.0,
             'on_win_reward': 0.0,
-            'on_knockout_reward': 0.0,
+            'on_knockout_reward': 8.0,
             'on_combo_reward': 0.0,
             'on_equip_reward': 0.0,
             'on_drop_reward': 0.0
@@ -1097,12 +1122,12 @@ def gen_reward_manager(numCheckpoint:int):
         0.5: {
             'damage_interaction_reward': 10.0,
             'advantage_state_reward': 0.0,
-            'whiff_punishment_reward': 0.0,
+            'whiff_punishment_reward': 1.0,
             'weapon_stability_reward': 0.0,
             # 'proximity_to_opponent_reward': 2.0,
-            'head_to_opponent': 4.0,
-            'jumping_on_middle': 2.0,
-            'bad_taunt': 2.0,
+            'head_to_opponent': 6.0,
+            'jumping_on_middle': 3.0,
+            'bad_taunt': 0.05,
             'no_input_penalty': 2.0,
             'on_win_reward': 100,
             'on_knockout_reward': 60,
@@ -1118,7 +1143,7 @@ def gen_reward_manager(numCheckpoint:int):
             # 'proximity_to_opponent_reward': 2.0,
             'head_to_opponent': 6.0,
             'jumping_on_middle': 1.0,
-            'no_input_penalty': 0.01,
+            'no_input_penalty': 0.1,
             'on_win_reward': 100,
             'on_knockout_reward': 80,
             'on_combo_reward': 0.0,
@@ -1248,8 +1273,8 @@ if __name__ == '__main__':
     # Set opponent settings here:
     opponent_spec0 = {
                     'self_play': (0, selfplay_handler),
-                    'self_play_random': (0,selfplay_random),
-                    'constant_agent': (14, partial(ConstantAgent)),
+                    'self_play_random': (1,selfplay_random),
+                    'constant_agent': (19, partial(ConstantAgent)),
                     'easy_hard_coded_bot': (0, partial(EasyHardCodedBot)),
                     'hard_hard_coded_bot': (0,partial(HardHardCodedBot))
                 }
@@ -1296,12 +1321,12 @@ if __name__ == '__main__':
     }
 
     timeStepDict = {
-        0: 0.4,
-        1: 0.2,
-        2: 0.2,
-        3: 0.2,
+        0: 2_000_000,
+        0.5: 4_000_000,
+        1: 6_000_000,
+        2: 12_000_000,
+        3: 10_000_000,
     }
-    totalSteps = 500_000
     #overnight or rightnow
     state = 'rightnow' 
     if state == 'overnight':
@@ -1317,7 +1342,7 @@ if __name__ == '__main__':
                 save_handler,
                 opponent_cfg,
                 CameraResolution.LOW,
-                train_timesteps=int(timeStepDict[i] * totalSteps),  # Continue training (total 15M from start)
+                train_timesteps=int(timeStepDict[i]),  # Continue training (total 15M from start)
                 train_logging=TrainLogging.PLOT
             )
     elif state == 'rightnow':
@@ -1330,6 +1355,6 @@ if __name__ == '__main__':
             save_handler,
             opponent_cfg,
             CameraResolution.LOW,
-            train_timesteps=totalSteps,  # Continue training (total 15M from start)
+            train_timesteps=timeStepDict[RUN],  # Continue training (total 15M from start)
             train_logging=TrainLogging.PLOT
         )
