@@ -433,8 +433,8 @@ class CustomAgent(Agent):
                 "MlpPolicy", 
                     wrapped_env, 
                     n_steps=2048,          # rollout length per update
-                    batch_size=2048,        # minibatch size
-                    n_epochs=10,           # updates per batch
+                    batch_size=256,        # minibatch size
+                    n_epochs=10,       # updates per batch
                     gamma=0.995,
                     gae_lambda=0.95,
                     clip_range=0.2,
@@ -1119,7 +1119,7 @@ def gen_reward_manager(numCheckpoint:int):
             'on_equip_reward': 0.0,
             'on_drop_reward': 0.0
         },
-        0.5: {
+        1: {
             'damage_interaction_reward': 10.0,
             'advantage_state_reward': 0.0,
             'whiff_punishment_reward': 1.0,
@@ -1135,7 +1135,7 @@ def gen_reward_manager(numCheckpoint:int):
             'on_equip_reward': 0.0,
             'on_drop_reward': 0.0
         },
-        1: {
+        2: {
             'damage_interaction_reward': 20.0,
             'advantage_state_reward': 0.0,
             'whiff_punishment_reward': 2.0,
@@ -1150,7 +1150,7 @@ def gen_reward_manager(numCheckpoint:int):
             'on_equip_reward': 0.0,
             'on_drop_reward': 0.0
         }, 
-        2: {
+        3: {
             'damage_interaction_reward': 15.0,
             'advantage_state_reward': 0.0,
             'whiff_punishment_reward': 4.0,
@@ -1164,7 +1164,7 @@ def gen_reward_manager(numCheckpoint:int):
             'on_equip_reward': 0.1,
             'on_drop_reward': 0.08
         },
-        3: {
+        4: {
             'damage_interaction_reward': 15.0,
             'advantage_state_reward': 2.0,
             'whiff_punishment_reward': 1.0,
@@ -1279,7 +1279,7 @@ if __name__ == '__main__':
                     'hard_hard_coded_bot': (0,partial(HardHardCodedBot))
                 }
     
-    opponent_spec05 = {
+    opponent_spec1 = {
                     'self_play': (6, selfplay_handler),
                     'self_play_random': (0,selfplay_random),
                     'constant_agent': (14, partial(ConstantAgent)),
@@ -1288,7 +1288,7 @@ if __name__ == '__main__':
                 }
     
     
-    opponent_spec1 = {
+    opponent_spec2 = {
         'self_play': (9, selfplay_handler),
         'self_play_random': (2,selfplay_random),
         'constant_agent': (0, partial(ConstantAgent)),
@@ -1296,7 +1296,7 @@ if __name__ == '__main__':
         'hard_hard_coded_bot': (0,partial(HardHardCodedBot))
     }   
 
-    opponent_spec2 = {
+    opponent_spec3 = {
         'self_play': (10, selfplay_handler),
         'self_play_random': (2,selfplay_random),
         'constant_agent': (0, partial(ConstantAgent)),
@@ -1304,7 +1304,7 @@ if __name__ == '__main__':
         'hard_hard_coded_bot': (1,partial(HardHardCodedBot))
     }
 
-    opponent_spec3 = {
+    opponent_spec4 = {
         'self_play': (12, selfplay_handler),
         'constant_agent': (0, partial(ConstantAgent)),
         'easy_hard_coded_bot': (0, partial(EasyHardCodedBot)),
@@ -1314,23 +1314,23 @@ if __name__ == '__main__':
     
     opponent_specDict = {
         0: opponent_spec0,
-        0.5:opponent_spec05,
         1:opponent_spec1,
         2:opponent_spec2,
         3:opponent_spec3,
+        4:opponent_spec4,
     }
 
     timeStepDict = {
         0: 2_000_000,
-        0.5: 4_000_000,
-        1: 6_000_000,
-        2: 12_000_000,
-        3: 10_000_000,
+        1: 4_000_000,
+        2: 6_000_000,
+        3: 12_000_000,
+        4: 10_000_000,
     }
     #overnight or rightnow
     state = 'rightnow' 
     if state == 'overnight':
-        for i in range(4):
+        for i in range(5):
             print(f"line1242: currently at checkpoint: {i}")
             # Reward manager
             reward_manager = gen_reward_manager(i)
