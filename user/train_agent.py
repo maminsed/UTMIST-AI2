@@ -433,7 +433,7 @@ class CustomAgent(Agent):
                 "MlpPolicy", 
                     wrapped_env, 
                     n_steps=2048,          # rollout length per update
-                    batch_size=256,        # minibatch size
+                    batch_size=2048,        # minibatch size
                     n_epochs=10,           # updates per batch
                     gamma=0.995,
                     gae_lambda=0.95,
