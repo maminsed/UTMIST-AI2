@@ -396,10 +396,6 @@ class MLPWithLayerNorm(BaseFeaturesExtractor):
     def __init__(self, observation_space:gym.Space, features_dim:int = 256):
         super().__init__(observation_space, features_dim)
         in_dim = observation_space.shape[0]
-        #TODO: EXPERIMENT:
-        #   1. without LayerNorm
-        #   2. ReLu instead of SiLU
-        #   3. SiLU + dropout?
         self.model = nn.Sequential(
             nn.Linear(in_dim, 256), 
             nn.SiLU(),
@@ -420,7 +416,6 @@ class CustomAgent(Agent):
     
     def _initialize(self) -> None:
         print("initializing PPO network: uwu")
-        print(type(self.env.action_space))
         if self.file_path is None:
             # Set device for GPU training
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -755,6 +750,7 @@ state_mapping = [
     'KOState',
     'TauntState',
 ]
+
 def bad_taunt(env: BoxToMultiBinary10) -> float:
     unwrapped: WarehouseBrawl = env.unwrapped
     player_move = unwrapped.obs_helper("player_move_types")
@@ -1238,6 +1234,15 @@ if __name__ == '__main__':
                     'hard_hard_coded_bot': (0,partial(HardHardCodedBot))
                 }
     
+    opponent_spec05 = {
+                    'self_play': (6, selfplay_handler),
+                    'self_play_random': (0,selfplay_random),
+                    'constant_agent': (14, partial(ConstantAgent)),
+                    'easy_hard_coded_bot': (0, partial(EasyHardCodedBot)),
+                    'hard_hard_coded_bot': (0,partial(HardHardCodedBot))
+                }
+    
+    
     opponent_spec1 = {
         'self_play': (9, selfplay_handler),
         'self_play_random': (2,selfplay_random),
@@ -1263,7 +1268,8 @@ if __name__ == '__main__':
     
     
     opponent_specDict = {
-        0:opponent_spec0,
+        0: opponent_spec0,
+        0.5:opponent_spec05,
         1:opponent_spec1,
         2:opponent_spec2,
         3:opponent_spec3,
