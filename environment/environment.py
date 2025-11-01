@@ -4056,6 +4056,30 @@ class SpawnerVFX(GameObject):
         camera.canvas = surface
         self.anim.render(camera, flipped=self.flipped)
         
+class NullSpawnerVFX(GameObject):
+    """No-op VFX used in training to avoid loading GIFs in each worker."""
+    def __init__(self, world_pos=(0.0, 0.0), flipped=True):
+        self.world_pos = [float(world_pos[0]), float(world_pos[1])]
+        self.flipped = flipped
+
+    def _steps(self, anim_name: str) -> int:
+        return 0
+
+    def show_spawn(self):
+        return
+
+    def show_idle(self):
+        return
+
+    def show_despawn(self):
+        return
+
+    def show_pickup(self):
+        return
+
+    def render(self, surface, camera):
+        return
+
 class WeaponGO(GameObject):
     def __init__(self, env, name, image: pygame.Surface, fall_speed: int = 0.1, physics_on: bool = False):
 
@@ -4074,19 +4098,24 @@ class WeaponGO(GameObject):
     
     def get_vfx(self):
         if not hasattr(self,"vfx"):
-            if self.name == "Spear":
-                vfx_folder = "environment/spearvfx"
-            elif self.name == "Hammer":
-                vfx_folder = "environment/hammervfx"
-            
-            scale = 1.0
-            flipped = False
-            self.vfx = SpawnerVFX(
-                camera=self.env.camera,
-                world_pos=self.world_pos,
-                animation_folder=vfx_folder,
-                scale=scale, flipped = flipped
-            )
+            if getattr(self.env, 'train_mode', False):
+                # Use lightweight placeholder during training
+                self.vfx = NullSpawnerVFX(world_pos=self.world_pos, flipped=False)
+            else:
+                if self.name == "Spear":
+                    vfx_folder = "environment/spearvfx"
+                elif self.name == "Hammer":
+                    vfx_folder = "environment/hammervfx"
+                else:
+                    vfx_folder = "environment/spearvfx"
+                scale = 1.0
+                flipped = False
+                self.vfx = SpawnerVFX(
+                    camera=self.env.camera,
+                    world_pos=self.world_pos,
+                    animation_folder=vfx_folder,
+                    scale=scale, flipped = flipped
+                )
         return self.vfx
 
            
@@ -4198,7 +4227,10 @@ class WeaponSpawner:
         self.initialize_vfx()
     def initialize_vfx(self):
            #VFX 
-        self.vfx = SpawnerVFX(camera=self.camera, world_pos=self.world_pos, animation_folder="environment/spawnervfx", scale=1.25) # spawn.gif, idle.gif, despawn.gif, pickup.gif
+        if getattr(self.env, 'train_mode', False):
+            self.vfx = NullSpawnerVFX(world_pos=self.world_pos)
+        else:
+            self.vfx = SpawnerVFX(camera=self.camera, world_pos=self.world_pos, animation_folder="environment/spawnervfx", scale=1.25) # spawn.gif, idle.gif, despawn.gif, pickup.gif
         self.env.objects[f"SpawnerVFX{self.id}"] = self.vfx
         self.flag = False
  

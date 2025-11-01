@@ -367,11 +367,17 @@ class SaveHandler():
         return False
 
     def get_random_model_path(self) -> str:
+        # Filter out paths that no longer exist
+        self.history = [p for p in self.history if os.path.isfile(p)]
         if len(self.history) == 0:
             return None
-        return random.choice(self.history)
+        # Avoid the newest in case it is being written
+        pool = self.history[:-1] if len(self.history) > 1 else self.history
+        return random.choice(pool)
 
     def get_latest_model_path(self) -> str:
+        # Filter out paths that no longer exist
+        self.history = [p for p in self.history if os.path.isfile(p)]
         if len(self.history) == 0:
             return None
         return self.history[-1]
@@ -385,13 +391,24 @@ class SelfPlayHandler(ABC):
     def get_model_from_path(self, path) -> Agent:
         if path:
             try:
-                opponent = self.agent_partial(file_path=path)
-            except FileNotFoundError:
-                print(f"Warning: Self-play file {path} not found. Defaulting to constant agent.")
-                opponent = ConstantAgent()
+                fixed_path = path.strip()
+                # Normalize possible double extension
+                if fixed_path.endswith('.zip.zip'):
+                    fixed_path = fixed_path[:-4]
+                # Pass bare path to SB3 so it appends .zip
+                if fixed_path.endswith('.zip'):
+                    fixed_path = fixed_path[:-4]
+                opponent = self.agent_partial(file_path=fixed_path)
+                try:
+                    opponent.get_env_info(self.env)
+                    return opponent
+                except Exception as e:
+                    print(f"Warning: Error loading self-play model ({fixed_path}): {e}. Falling back to ConstantAgent.")
+            except Exception as e:
+                print(f"Warning: Self-play file problem for {path}: {e}. Defaulting to ConstantAgent.")
         else:
-            print("Warning: No self-play model saved. Defaulting to constant agent.")
-            opponent = ConstantAgent()
+            print("Warning: No self-play model saved. Defaulting to ConstantAgent.")
+        opponent = ConstantAgent()
         opponent.get_env_info(self.env)
         return opponent
 
@@ -975,29 +992,146 @@ class TrainLogging(Enum):
     TO_FILE = 1
     PLOT = 2
 
-def plot_results(log_folder, title="Learning Curve"):
+def plot_results(log_folder, title="Learning Curve", file_suffix: str = ""):
     """
-    plot the results
+    Produce a richer training report figure and a simple learning curve.
 
-    :param log_folder: (str) the save location of the results to plot
-    :param title: (str) the title of the task to plot
+    Files written in log_folder:
+      - "Training Analysis.png" (multi-panel)
+      - f"{title}.png" (classic smoothed curve for compatibility)
     """
-    x, y = ts2xy(load_results(log_folder), "timesteps")
+    try:
+        results = load_results(log_folder)
+        x_all, r_all = ts2xy(results, "timesteps")
+    except Exception:
+        return
 
-    weights = np.repeat(1.0, 50) / 50
-    print(weights, y)
-    y = np.convolve(y, weights, "valid")
-    # Truncate x
-    x = x[len(x) - len(y) :]
+    if len(r_all) == 0:
+        return
 
-    fig = plt.figure(title)
-    plt.plot(x, y)
+    # Helper: moving average
+    def smooth(y, w):
+        w = max(1, int(w))
+        if len(y) < w:
+            return np.array(y), np.arange(len(y))
+        k = np.ones(w) / float(w)
+        y_s = np.convolve(y, k, mode="valid")
+        x_s = x_all[len(x_all) - len(y_s):]
+        return y_s, x_s
+
+    # --- Main (top-left): global smoothed curve ---
+    smooth_win = 100
+    y_s, x_s = smooth(r_all, smooth_win)
+
+    # --- Recent (top-right): last 1M timesteps ---
+    recent_span = 1_000_000
+    cutoff = max(0, x_all[-1] - recent_span)
+    mask_recent = x_all >= cutoff
+    x_recent = x_all[mask_recent]
+    y_recent = r_all[mask_recent]
+    y_recent_s, x_recent_s = smooth(y_recent, max(5, min(50, len(y_recent)//20)))
+
+    # --- Stats for bottom-left box ---
+    episodes = len(r_all)
+    steps = int(x_all[-1])
+    final_avg = float(np.mean(r_all[-min(episodes, 100):]))
+    r_min = float(np.min(r_all))
+    r_max = float(np.max(r_all))
+    # Simple trend on recent smoothed curve
+    if len(x_recent_s) >= 2:
+        trend_coef = np.polyfit(x_recent_s, y_recent_s, 1)[0]
+    else:
+        trend_coef = 0.0
+
+    # --- Histogram data (bottom-right) ---
+    hist_vals = r_all
+
+    # Build figure
+    fig = plt.figure(figsize=(12, 7))
+    fig.suptitle("Training Analysis:", fontsize=14, fontweight="bold")
+
+    # Top-left
+    ax1 = fig.add_subplot(2, 2, 1)
+    ax1.plot(x_s, y_s, color="royalblue", linewidth=1.5, label=f"Smoothed Reward")
+    ax1.set_title(f"Learning Curve (Smoothed, Window={smooth_win})", fontsize=9)
+    ax1.set_xlabel("Timesteps")
+    ax1.set_ylabel("Episode Reward")
+    ax1.legend(loc="lower left", fontsize=8)
+    ax1.grid(alpha=0.2)
+
+    # Top-right
+    ax2 = fig.add_subplot(2, 2, 2)
+    ax2.axhline(0, linestyle="--", color="gray", linewidth=0.8)
+    if len(x_recent_s) > 0:
+        ax2.plot(x_recent_s, y_recent_s, color="darkgreen", linewidth=1.5)
+    ax2.set_title("Recent Performance (Last 1M Steps)", fontsize=9)
+    ax2.set_xlabel("Timesteps")
+    ax2.set_ylabel("Episode Reward")
+    ax2.grid(alpha=0.2)
+    if len(x_recent) > 0:
+        ax2.set_xlim(left=x_recent[0], right=x_recent[-1])
+
+    # Bottom-left: Stats box
+    ax3 = fig.add_subplot(2, 2, 3)
+    ax3.axis("off")
+    lines = []
+    lines.append("TRAINING STATISTICS\n\n")
+    lines.append(f"Checkpoint Steps: {steps/1e6:.2f}M\n")
+    lines.append(f"CSV Data Steps: {steps/1e6:.2f}M\n")
+    lines.append(f"Episodes Recorded: {episodes}\n")
+    lines.append(f"Final Average Reward: {final_avg:.2f}\n")
+    lines.append(f"Maximum Reward: {r_max:.2f}\n")
+    lines.append(f"Minimum Reward: {r_min:.2f}\n")
+    lines.append(f"Recent Trend: {trend_coef:.6f}\n\n")
+    lines.append("INTERPRETATION:\n")
+    lines.append("- Final reward > 0: Agent winning more than losing\n")
+    lines.append("- Final reward < 0: Agent needs improvement\n")
+    lines.append("- Upward trend: Learning successfully\n")
+    lines.append("- Downward trend: May need reward tuning\n\n")
+    status = []
+    if final_avg < -25:
+        status.append("Agent struggling (highly negative rewards)")
+    if abs(trend_coef) < 1e-6:
+        status.append("Plateauing: may need hyperparameter tuning")
+    lines.append("CURRENT STATUS:\n")
+    if status:
+        for s in status:
+            lines.append(f"- {s}\n")
+    else:
+        lines.append("- Stable or improving\n")
+    ax3.text(0.02, 0.98, "".join(lines), va="top", family="monospace", fontsize=8,
+             bbox=dict(facecolor="#f7f7f7", edgecolor="#999", boxstyle="round,pad=0.5"))
+
+    # Bottom-right: histogram
+    ax4 = fig.add_subplot(2, 2, 4)
+    ax4.hist(hist_vals, bins=60, color="#5b84b1ff", edgecolor="black", alpha=0.8)
+    ax4.axvline(0, color="red", linestyle="--", linewidth=1.2, label="Zero Reward")
+    ax4.set_title("Reward Distribution", fontsize=9)
+    ax4.set_xlabel("Episode Reward")
+    ax4.set_ylabel("Frequency")
+    ax4.legend(fontsize=8)
+    ax4.grid(alpha=0.2)
+
+    # Save analysis figure
+    analysis_path = os.path.join(log_folder, f"Training Analysis{file_suffix}.png")
+    try:
+        fig.tight_layout(rect=[0, 0.02, 1, 0.96])
+        fig.savefig(analysis_path, dpi=130)
+    finally:
+        plt.close(fig)
+
+    # Also save a simple classic curve for compatibility
+    y_simple, x_simple = smooth(r_all, 50)
+    fig2 = plt.figure(title)
+    plt.plot(x_simple, y_simple)
     plt.xlabel("Number of Timesteps")
     plt.ylabel("Rewards")
     plt.title(title + " Smoothed")
-
-    # save to file
-    plt.savefig(log_folder + title + ".png")
+    simple_path = os.path.join(log_folder, f"{title}{file_suffix}.png")
+    try:
+        fig2.savefig(simple_path)
+    finally:
+        plt.close(fig2)
 
 def train(agent: Agent,
           reward_manager: RewardManager,

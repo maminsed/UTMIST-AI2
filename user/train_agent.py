@@ -48,11 +48,25 @@ class SB3Agent(Agent):
         super().__init__(file_path)
 
     def _initialize(self) -> None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
         if self.file_path is None:
-            self.model = self.sb3_class("MlpPolicy", self.env, verbose=0, n_steps=30*90*3, batch_size=128, ent_coef=0.01)
+            self.model = self.sb3_class(
+                "MlpPolicy",
+                self.env,
+                verbose=0,
+                n_steps=2048,
+                batch_size=256,
+                ent_coef=0.002,
+                learning_rate=3e-4,
+                n_epochs=20,
+                gae_lambda=0.92,
+                vf_coef=0.7,
+                clip_range=0.25,
+                device=device,
+            )
             del self.env
         else:
-            self.model = self.sb3_class.load(self.file_path)
+            self.model = self.sb3_class.load(self.file_path, device=device)
 
     def _gdown(self) -> str:
         # Call gdown to your link
@@ -68,12 +82,29 @@ class SB3Agent(Agent):
     def save(self, file_path: str) -> None:
         self.model.save(file_path, include=['num_timesteps'])
 
-    def learn(self, env, total_timesteps, log_interval: int = 1, verbose=0):
-        self.model.set_env(env)
+    def learn(self, env, total_timesteps, log_interval: int = 1, verbose=0, callback=None):
         self.model.verbose = verbose
+        try:
+            # If n_envs matches, standard path
+            if hasattr(env, "num_envs") and hasattr(self.model, "n_envs") and env.num_envs != self.model.n_envs:
+                # Recreate model with new env count while preserving weights
+                import tempfile, os
+                with tempfile.TemporaryDirectory() as tmpd:
+                    tmp_path = os.path.join(tmpd, "tmp_model.zip")
+                    self.model.save(tmp_path, include=['num_timesteps'])
+                    # Load with new env bound
+                    device = "cuda" if torch.cuda.is_available() else "cpu"
+                    self.model = self.sb3_class.load(tmp_path, env=env, device=device)
+            else:
+                self.model.set_env(env)
+        except Exception:
+            # Fallback to setting env directly
+            self.model.set_env(env)
+
         self.model.learn(
             total_timesteps=total_timesteps,
             log_interval=log_interval,
+            callback=callback,
         )
 
 class RecurrentPPOAgent(Agent):
@@ -308,11 +339,26 @@ class CustomAgent(Agent):
         super().__init__(file_path)
     
     def _initialize(self) -> None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
         if self.file_path is None:
-            self.model = self.sb3_class("MlpPolicy", self.env, policy_kwargs=self.extractor.get_policy_kwargs(), verbose=0, n_steps=30*90*3, batch_size=128, ent_coef=0.01)
+            self.model = self.sb3_class(
+                "MlpPolicy",
+                self.env,
+                policy_kwargs=self.extractor.get_policy_kwargs(),
+                verbose=0,
+                n_steps=2048,
+                batch_size=256,
+                ent_coef=0.002,
+                learning_rate=1e-4,
+                n_epochs=20,
+                gae_lambda=0.98,
+                vf_coef=0.25,
+                clip_range=0.15,
+                device=device,
+            )
             del self.env
         else:
-            self.model = self.sb3_class.load(self.file_path)
+            self.model = self.sb3_class.load(self.file_path, device=device)
 
     def _gdown(self) -> str:
         # Call gdown to your link
@@ -328,12 +374,25 @@ class CustomAgent(Agent):
     def save(self, file_path: str) -> None:
         self.model.save(file_path, include=['num_timesteps'])
 
-    def learn(self, env, total_timesteps, log_interval: int = 1, verbose=0):
-        self.model.set_env(env)
+    def learn(self, env, total_timesteps, log_interval: int = 1, verbose=0, callback=None):
         self.model.verbose = verbose
+        try:
+            if hasattr(env, "num_envs") and hasattr(self.model, "n_envs") and env.num_envs != self.model.n_envs:
+                import tempfile, os
+                with tempfile.TemporaryDirectory() as tmpd:
+                    tmp_path = os.path.join(tmpd, "tmp_model.zip")
+                    self.model.save(tmp_path, include=['num_timesteps'])
+                    device = "cuda" if torch.cuda.is_available() else "cpu"
+                    self.model = self.sb3_class.load(tmp_path, env=env, device=device)
+            else:
+                self.model.set_env(env)
+        except Exception:
+            self.model.set_env(env)
+
         self.model.learn(
             total_timesteps=total_timesteps,
             log_interval=log_interval,
+            callback=callback,
         )
 
 # --------------------------------------------------------------------------------
@@ -407,6 +466,70 @@ def damage_interaction_reward(
 
 
 # In[ ]:
+
+
+# ----------------------- Skill-Specific Rewards -----------------------
+def _is_offstage(player: Player, env: WarehouseBrawl, margin: float = 2.0) -> bool:
+    # Near horizontal blast zones and not grounded
+    half_w = env.stage_width_tiles / 2.0
+    return (abs(player.body.position.x) > (half_w - margin)) and (not player.is_on_floor())
+
+def recover_from_offstage_reward(env: WarehouseBrawl, margin: float = 2.0) -> float:
+    """
+    Rewards landing after being offstage (teaches consistent recoveries).
+    Uses a small bit of state attached to env between steps.
+    """
+    player: Player = env.objects["player"]
+    prev_flag = getattr(env, "_r_prev_offstage", False)
+    now_off = _is_offstage(player, env, margin)
+    landed = (not now_off) and player.is_on_floor() and prev_flag
+    env._r_prev_offstage = now_off
+    return 1.0 if landed else 0.0
+
+def edge_damage_bonus(env: WarehouseBrawl, edge_margin: float = 2.0) -> float:
+    """
+    Bonus for damaging the opponent when they are offstage (encourages edge-guards).
+    """
+    opponent: Player = env.objects["opponent"]
+    if opponent.damage_taken_this_frame <= 0:
+        return 0.0
+    if _is_offstage(opponent, env, edge_margin):
+        # Scale with damage, normalized similar to damage_interaction_reward
+        return (opponent.damage_taken_this_frame / 140.0) * 2.0
+    return 0.0
+
+def approach_when_safe(env: WarehouseBrawl) -> float:
+    """
+    Encourage closing distance when opponent is NOT attacking (neutral approach).
+    """
+    player: Player = env.objects["player"]
+    opponent: Player = env.objects["opponent"]
+    opp_is_attacking = isinstance(opponent.state, AttackState) or issubclass(opponent.state.__class__, AttackState)
+    if opp_is_attacking:
+        return 0.0
+    # Reuse head-to-opponent directional shaping (positive when moving toward opponent)
+    multiplier = -1 if player.body.position.x > opponent.body.position.x else 1
+    step_dx = (player.body.position.x - player.prev_x)
+    return 0.02 * multiplier * step_dx
+
+def disengage_when_threatened(env: WarehouseBrawl, threat_dist: float = 2.5) -> float:
+    """
+    Encourage backing off if opponent is attacking and close (defensive disengage).
+    """
+    player: Player = env.objects["player"]
+    opponent: Player = env.objects["opponent"]
+    opp_is_attacking = isinstance(opponent.state, AttackState) or issubclass(opponent.state.__class__, AttackState)
+    if not opp_is_attacking:
+        return 0.0
+    dist_x = abs(player.body.position.x - opponent.body.position.x)
+    if dist_x > threat_dist:
+        return 0.0
+    # Reward moving away from opponent along X
+    moved_away = (opponent.body.position.x > player.body.position.x and (player.body.position.x - player.prev_x) < 0) or \
+                 (opponent.body.position.x < player.body.position.x and (player.body.position.x - player.prev_x) > 0)
+    if moved_away:
+        return 0.05 * abs(player.body.position.x - player.prev_x)
+    return 0.0
 
 
 def danger_zone_reward(
@@ -543,21 +666,30 @@ Add your dictionary of RewardFunctions here using RewTerms
 '''
 def gen_reward_manager():
     reward_functions = {
-        #'target_height_reward': RewTerm(func=base_height_l2, weight=0.0, params={'target_height': -4, 'obj_name': 'player'}),
-        'danger_zone_reward': RewTerm(func=danger_zone_reward, weight=0.5),
+        # Core shaping
+        'danger_zone_reward': RewTerm(func=danger_zone_reward, weight=0.2),
         'damage_interaction_reward': RewTerm(func=damage_interaction_reward, weight=1.0),
-        #'head_to_middle_reward': RewTerm(func=head_to_middle_reward, weight=0.01),
-        #'head_to_opponent': RewTerm(func=head_to_opponent, weight=0.05),
-        'penalize_attack_reward': RewTerm(func=in_state_reward, weight=-0.04, params={'desired_state': AttackState}),
-        'holding_more_than_3_keys': RewTerm(func=holding_more_than_3_keys, weight=-0.01),
-        #'taunt_reward': RewTerm(func=in_state_reward, weight=0.2, params={'desired_state': TauntState}),
+
+        # Neutral + spacing
+        'approach_when_safe': RewTerm(func=approach_when_safe, weight=1.5),
+        'disengage_when_threatened': RewTerm(func=disengage_when_threatened, weight=1.0),
+
+        # Edge guarding and recovery
+        'edge_damage_bonus': RewTerm(func=edge_damage_bonus, weight=1.2),
+        'recover_from_offstage_reward': RewTerm(func=recover_from_offstage_reward, weight=1.5),
+
+        # Hygiene
+        'penalize_attack_spam': RewTerm(func=in_state_reward, weight=-0.05, params={'desired_state': AttackState}),
+        'holding_more_than_3_keys': RewTerm(func=holding_more_than_3_keys, weight=-0.02),
     }
     signal_subscriptions = {
         'on_win_reward': ('win_signal', RewTerm(func=on_win_reward, weight=50)),
-        'on_knockout_reward': ('knockout_signal', RewTerm(func=on_knockout_reward, weight=8)),
-        'on_combo_reward': ('hit_during_stun', RewTerm(func=on_combo_reward, weight=5)),
-        'on_equip_reward': ('weapon_equip_signal', RewTerm(func=on_equip_reward, weight=10)),
-        'on_drop_reward': ('weapon_drop_signal', RewTerm(func=on_drop_reward, weight=15))
+        # Strongly penalize SDs and reward KOs
+        'on_knockout_reward': ('knockout_signal', RewTerm(func=on_knockout_reward, weight=15)),
+        'on_combo_reward': ('hit_during_stun', RewTerm(func=on_combo_reward, weight=10)),
+        # Weapon handling
+        'on_equip_reward': ('weapon_equip_signal', RewTerm(func=on_equip_reward, weight=12)),
+        'on_drop_reward': ('weapon_drop_signal', RewTerm(func=on_drop_reward, weight=10))
     }
     return RewardManager(reward_functions, signal_subscriptions)
 
@@ -568,7 +700,7 @@ def gen_reward_manager():
 The main function runs training. You can change configurations such as the Agent type or opponent specifications here.
 '''
 if __name__ == '__main__':
-    # Create agent
+    # Create agent (PPO works well and is fast)
     my_agent = CustomAgent(sb3_class=PPO, extractor=MLPExtractor)
 
     # Start here if you want to train from scratch. e.g:
@@ -588,26 +720,28 @@ if __name__ == '__main__':
     # Set save settings here:
     save_handler = SaveHandler(
         agent=my_agent, # Agent to save
-        save_freq=100_000, # Save frequency
-        max_saved=40, # Maximum number of saved models
+        save_freq=50_000, # Faster snapshots for self-play pool
+        max_saved=30, # Keep a healthy pool
         save_path='checkpoints', # Save path
-        run_name='experiment_9',
-        mode=SaveHandlerMode.FORCE # Save mode, FORCE or RESUME
+        run_name='comp_run_1',
+        mode=SaveHandlerMode.FORCE # Use RESUME to continue a previous run
     )
 
     # Set opponent settings here:
+    # Start with some curriculum: easy -> scripted -> self-play
     opponent_specification = {
-                    'self_play': (8, selfplay_handler),
-                    'constant_agent': (0.5, partial(ConstantAgent)),
-                    'based_agent': (1.5, partial(BasedAgent)),
-                }
+        'constant_agent': (1.0, partial(ConstantAgent)),
+        'self_play': (2.0, selfplay_handler),
+        'based_agent': (6.0, partial(BasedAgent)),
+    }
     opponent_cfg = OpponentsCfg(opponents=opponent_specification)
 
-    train(my_agent,
+    train(
+        my_agent,
         reward_manager,
         save_handler,
         opponent_cfg,
         CameraResolution.LOW,
-        train_timesteps=1_000_000_000,
-        train_logging=TrainLogging.PLOT
+        train_timesteps=3_000_000,
+        train_logging=TrainLogging.NONE
     )
