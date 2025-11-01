@@ -1234,7 +1234,7 @@ if __name__ == '__main__':
     
     # OR: Continue from checkpoint (only if you want to try adapting old behavior):
     # my_agent = CustomAgent(sb3_class=PPO, file_path="checkpoints/AMIN_DUMB_AF_2/rl_model_501760_steps.zip", extractor=MLPWithLayerNorm)
-    my_agent = CustomAgent(sb3_class=PPO, file_path="checkpoints/z3/rl_model_1773387_steps.zip", extractor=MLPWithLayerNorm)
+    my_agent = CustomAgent(sb3_class=PPO, file_path="checkpoints/z4/rl_model_2275147_steps.zip", extractor=MLPWithLayerNorm)
 
     # Start here if you want to train from scratch. e.g:
     #my_agent = RecurrentPPOAgent()
@@ -1258,7 +1258,7 @@ if __name__ == '__main__':
         save_freq=250_000, # Save frequency - more frequent to catch good models
         max_saved=40, # Maximum number of saved models
         save_path='checkpoints', # Save path
-        run_name='z4',  # Fresh training with aggressive chase + no whiffs
+        run_name='zFinal',  # Fresh training with aggressive chase + no whiffs
         mode=SaveHandlerMode.RESUME  # Start completely fresh
     )
 
@@ -1324,7 +1324,7 @@ if __name__ == '__main__':
                 spawners=spawners
             )
     elif state == 'rightnow':
-        RUN = 2
+        RUN = 3
         reward_manager = gen_reward_manager(RUN)
 
         opponent_cfg = OpponentsCfg(opponents=opponent_specDict[RUN])
