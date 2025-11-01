@@ -69,21 +69,21 @@ class SubmittedAgent(Agent):
         self.prev_pos = pos
 
         self.recover = False
-        if pos[0] < -6.6:
+        if pos[0] < -4.8:
             action = self.act_helper.press_keys(['d'], action)
             self.recover = True
-        elif pos[0] > -2.4 and pos[0] < 0:
+        elif pos[0] > -4.2 and pos[0] < 0:
             action = self.act_helper.press_keys(['a'], action)
             self.recover = True
-        elif pos[0] > 0 and pos[0] < 2.4:
+        elif pos[0] > 0 and pos[0] < 4.2:
             action = self.act_helper.press_keys(['d'], action)
             self.recover = True
-        elif pos[0] > 6.6:
+        elif pos[0] > 4.8:
             action = self.act_helper.press_keys(['a'], action)
             self.recover = True
 
         # Jump if falling
-        if self.down or self.obs_helper.get_section(obs, 'player_grounded') == 1:
+        if pos[1] > -5 and (self.down or self.obs_helper.get_section(obs, 'player_grounded') == 1):
             if self.time % 10 == 0:
                 action = self.act_helper.press_keys(['space'], action)
             if self.recover and self.obs_helper.get_section(obs, 'player_grounded') == 0 and self.obs_helper.get_section(obs, 'player_jumps_left') == 0 and self.obs_helper.get_section(obs, 'player_recoveries_left') == 1 and self.time % 2 == 0:
@@ -98,7 +98,10 @@ class SubmittedAgent(Agent):
         
                 
         # Attack if near
-        if not self.recover and euclid(pos, opp_pos) < 3.5:
+        if not self.recover and abs(pos[0] - opp_pos[0]) < 0.45 and pos[1] < opp_pos[1]:
+            action = self.act_helper.press_keys(['s'], action)
+            action = self.act_helper.press_keys(['k'], action)
+        elif not self.recover and euclid(pos, opp_pos) < 3:
             action = self.act_helper.press_keys(['j'], action)
 
         return action
