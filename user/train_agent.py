@@ -854,7 +854,7 @@ def danger_zone_reward(
     player_x = player.body.position.x
     player_y = player.body.position.y
 
-    if (player_x <= -6.9 or player_x >= 6.9) and (player_y <= 3):
+    if (player_x <= -6.9 or player_x >= 6.9) or (player_y <= 3):
         return -0.2 * env.dt
     return 0.0
 
