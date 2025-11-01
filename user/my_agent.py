@@ -82,6 +82,10 @@ class SubmittedAgent(Agent):
         else:
             # For inference: load trained model
             self.model = PPO.load(self.file_path)
+            self.model.policy.set_training_mode(False)     # SB3 helper
+            self.model.policy.eval()                       # PyTorch safety belt
+            for p in self.model.policy.parameters():
+                p.requires_grad_(False)
 
         # To run the sample TTNN model during inference, you can uncomment the 5 lines below:
         # This assumes that your self.model.policy has the MLPPolicy architecture defined in `train_agent.py` or `my_agent_tt.py`
@@ -119,7 +123,7 @@ class SubmittedAgent(Agent):
         return data_path
 
     def predict(self, obs):
-        act, _ = self.model.predict(obs)
+        act, _ = self.model.predict(obs, deterministic=True)
         return act.astype(np.float32)
 
     def save(self, file_path: str) -> None:

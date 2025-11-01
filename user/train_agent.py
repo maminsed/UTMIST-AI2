@@ -20,8 +20,7 @@ from torch.nn import functional as F
 from torch import nn as nn
 import numpy as np
 import pygame
-from stable_baselines3 import A2C, PPO, SAC, DQN, DDPG, TD3, HER 
-from sb3_contrib import QRDQN, RecurrentPPO
+from stable_baselines3 import PPO
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
@@ -427,7 +426,10 @@ class CustomAgent(Agent):
             
             policy_kwargs=dict(
                 features_extractor_class=MLPWithLayerNorm,
-                features_extractor_kwargs=dict(features_dim=256)
+                features_extractor_kwargs=dict(features_dim=256),
+                activation_fn=nn.SiLU,
+                ortho_init=False,
+                net_arch=[dict(pi=[256,256], vf=[256,256])],
             )
             self.model = self.sb3_class(
                 "MlpPolicy", 
@@ -563,36 +565,20 @@ def head_to_opponent(
     player = env.objects['player']
     opponent = env.objects['opponent']
 
-    # current absolute separations
-    curr_dx = abs(player.body.position.x - opponent.body.position.x)
-    curr_dy = abs(player.body.position.y - opponent.body.position.y)
-
-    # previous absolute separations (use prev positions stored on objects)
-    prev_dx = abs(player.prev_x - opponent.prev_x)
-    prev_dy = abs(player.prev_y - opponent.prev_y)
+    curr = (player.body.position.x - opponent.body.position.x) ** 2 + (player.body.position.y - opponent.body.position.y) ** 2
+    prev = (player.prev_x - opponent.prev_x) ** 2 + (player.prev_y - opponent.prev_y) ** 2
 
     eps = 1e-6
-    # fractional progress for each axis: positive when closing, negative when opening
-    frac_x = (prev_dx - curr_dx) / max(prev_dx, eps)
-    frac_y = (prev_dy - curr_dy) / max(prev_dy, eps)
+    combined = np.tanh(prev - curr)
 
-    # weight horizontal closing more than vertical
-    w_x, w_y = 0.7, 0.3
-
-    combined = w_x * frac_x + w_y * frac_y
-
-    # shape and scale the signal
-    shaped = np.tanh(5.0 * combined)
-
-    return env.dt * shaped
+    return env.dt * combined
 
 def on_win_reward(env: WarehouseBrawl, agent: str) -> float:
     #favouring early wins and penilizing early looses
-    multipier = max(50/ max(env.steps, 1),1)
     if agent == 'player':
-        return multipier
+        return 1.0
     else:
-        return -multipier
+        return -1.0
 
 def on_knockout_reward(env: WarehouseBrawl, agent: str) -> float:
     """
@@ -660,7 +646,7 @@ def whiff_punishment_reward(env: WarehouseBrawl) -> float:
     
     far = min(distance/6.0,1.5)
     attacking = hasattr(player.state, 'move_type') and player.state.move_type not in [MoveType.NONE,MoveType.RECOVERY] 
-    whiff = not hasattr(player, 'damage_taken_this_frame') or player.damage_taken_this_frame == 0
+    whiff = getattr(opponent, 'damage_taken_this_frame', 0) == 0
     if not attacking or not whiff:
         return 0.0
     
@@ -752,9 +738,9 @@ def no_input_penalty(env: WarehouseBrawl) -> float:
     prev_x = player.prev_x
     prev_y = player.prev_y
     dist = (x-prev_x)**2 + (y-prev_y) ** 2
-    if dist > 0.1:
-        return min(dist * 0.1,0.5) * env.dt
-    return -0.1 * env.dt 
+    if dist < 0.1:
+        return -0.1 * env.dt 
+    return 0.0
 
 state_mapping = [
     'WalkingState',
@@ -1095,88 +1081,67 @@ def stage_control(env:WarehouseBrawl):
 Add your dictionary of RewardFunctions here using RewTerms
 '''
 def gen_reward_manager(numCheckpoint:int):
-    """
-    0: 2_000_000,
-    0.5: 4_000_000,
-    1: 2_000_000,
-    2: 6_000_000,
-    3: 10_000_000,
-    """
     checkPointDict = {
+        #move to opponent 500k
         0:{
             'damage_interaction_reward': 0.0,
             'advantage_state_reward': 0.0,
             'whiff_punishment_reward': 0.0,
             'weapon_stability_reward': 0.0,
-            # 'proximity_to_opponent_reward': 2.0,
-            'head_to_opponent': 10.0,
-            'jumping_on_middle': 1.0,
+            'head_to_opponent': 2.0,
+            'jumping_on_middle': 0.8,
             'bad_taunt': 0.0,
-            'no_input_penalty': 0.0,
+            'no_input_penalty': 0.8,
             'on_win_reward': 0.0,
-            'on_knockout_reward': 8.0,
+            'on_knockout_reward': 3.0,#It doesn't jump off
             'on_combo_reward': 0.0,
             'on_equip_reward': 0.0,
             'on_drop_reward': 0.0
         },
+        # attack the opponent: 1m
         1: {
-            'damage_interaction_reward': 10.0,
-            'advantage_state_reward': 0.0,
-            'whiff_punishment_reward': 1.0,
-            'weapon_stability_reward': 0.0,
-            # 'proximity_to_opponent_reward': 2.0,
-            'head_to_opponent': 6.0,
-            'jumping_on_middle': 3.0,
-            'bad_taunt': 0.05,
-            'no_input_penalty': 2.0,
-            'on_win_reward': 100,
-            'on_knockout_reward': 60,
-            'on_combo_reward': 0.0,
-            'on_equip_reward': 0.0,
-            'on_drop_reward': 0.0
-        },
-        2: {
-            'damage_interaction_reward': 20.0,
+            'damage_interaction_reward': 2.5,
             'advantage_state_reward': 0.0,
             'whiff_punishment_reward': 2.0,
             'weapon_stability_reward': 0.0,
-            # 'proximity_to_opponent_reward': 2.0,
-            'head_to_opponent': 6.0,
+            'head_to_opponent': 2.5,
             'jumping_on_middle': 1.0,
-            'no_input_penalty': 0.1,
-            'on_win_reward': 100,
-            'on_knockout_reward': 80,
+            'bad_taunt': 0.5,
+            'no_input_penalty': 1.0,
+            'on_win_reward': 4.0,
+            'on_knockout_reward': 3.0,
             'on_combo_reward': 0.0,
             'on_equip_reward': 0.0,
-            'on_drop_reward': 0.0
-        }, 
-        3: {
-            'damage_interaction_reward': 15.0,
-            'advantage_state_reward': 0.0,
-            'whiff_punishment_reward': 4.0,
-            'weapon_stability_reward': 5.0,
-            # 'proximity_to_opponent_reward': 0.5,
-            'head_to_opponent': 4.0,
-            'jumping_on_middle': 0.5,
-            'on_win_reward': 100,
-            'on_knockout_reward': 80,
-            'on_combo_reward': 0.0,
-            'on_equip_reward': 0.1,
-            'on_drop_reward': 0.08
+            'on_drop_reward': 0.0,
         },
-        4: {
-            'damage_interaction_reward': 15.0,
-            'advantage_state_reward': 2.0,
-            'whiff_punishment_reward': 1.0,
-            'weapon_stability_reward': 5.0,
-            # 'proximity_to_opponent_reward': 0.5,
-            'head_to_opponent': 4.0,
-            'jumping_on_middle': 0.01,
-            'on_win_reward': 100,
-            'on_knockout_reward': 80,
-            'on_combo_reward': 0.0,
-            'on_equip_reward': 0.1,
-            'on_drop_reward': 0.001
+        # learn to use weapons: 500k - make sure to turn on weapons
+        2: {
+            'damage_interaction_reward': 2.5,
+            'advantage_state_reward': 0.5,
+            'whiff_punishment_reward': 2.5,
+            'weapon_stability_reward': 2.0,
+            'head_to_opponent': 1.5,
+            'jumping_on_middle': 0.5,
+            'no_input_penalty': 1.5,
+            'on_win_reward': 4.0,
+            'on_knockout_reward': 3.0,
+            'on_combo_reward': 0.5,
+            'on_equip_reward': 1.5,
+            'on_drop_reward': 1.4,
+        }, 
+        #advance moves: 1m
+        3: {
+            'damage_interaction_reward': 2.5,
+            'advantage_state_reward': 1.0,
+            'whiff_punishment_reward': 2.0,
+            'weapon_stability_reward': 1.0,
+            'head_to_opponent': 0.5,
+            'jumping_on_middle': 0.1,
+            'on_win_reward': 4.5,
+            'on_knockout_reward': 3.5,
+            'on_combo_reward': 1.0,
+            'on_equip_reward': 0.5,
+            'on_drop_reward': 0.4,
         }
     }
 
@@ -1272,42 +1237,25 @@ if __name__ == '__main__':
 
     # Set opponent settings here:
     opponent_spec0 = {
-                    'self_play': (0, selfplay_handler),
-                    'self_play_random': (1,selfplay_random),
-                    'constant_agent': (19, partial(ConstantAgent)),
-                    'easy_hard_coded_bot': (0, partial(EasyHardCodedBot)),
-                    'hard_hard_coded_bot': (0,partial(HardHardCodedBot))
+                    'constant_agent': (10, partial(ConstantAgent)),
+                    'do_not_fall_agent': (10, partial(DoNotFallAgent)),
                 }
     
     opponent_spec1 = {
-                    'self_play': (6, selfplay_handler),
-                    'self_play_random': (0,selfplay_random),
-                    'constant_agent': (14, partial(ConstantAgent)),
-                    'easy_hard_coded_bot': (0, partial(EasyHardCodedBot)),
-                    'hard_hard_coded_bot': (0,partial(HardHardCodedBot))
+                    'self_play': (8, selfplay_handler),
+                    'do_not_fall_agent': (8, partial(DoNotFallAgent)),
+                    'easy_hard_coded_bot': (4, partial(EasyHardCodedBot)),
                 }
     
     
     opponent_spec2 = {
         'self_play': (9, selfplay_handler),
-        'self_play_random': (2,selfplay_random),
-        'constant_agent': (0, partial(ConstantAgent)),
         'easy_hard_coded_bot': (9, partial(EasyHardCodedBot)),
-        'hard_hard_coded_bot': (0,partial(HardHardCodedBot))
     }   
 
     opponent_spec3 = {
         'self_play': (10, selfplay_handler),
-        'self_play_random': (2,selfplay_random),
-        'constant_agent': (0, partial(ConstantAgent)),
-        'easy_hard_coded_bot': (7, partial(EasyHardCodedBot)),
-        'hard_hard_coded_bot': (1,partial(HardHardCodedBot))
-    }
-
-    opponent_spec4 = {
-        'self_play': (12, selfplay_handler),
-        'constant_agent': (0, partial(ConstantAgent)),
-        'easy_hard_coded_bot': (0, partial(EasyHardCodedBot)),
+        'easy_hard_coded_bot': (2, partial(EasyHardCodedBot)),
         'hard_hard_coded_bot': (8,partial(HardHardCodedBot))
     }
     
@@ -1317,21 +1265,20 @@ if __name__ == '__main__':
         1:opponent_spec1,
         2:opponent_spec2,
         3:opponent_spec3,
-        4:opponent_spec4,
     }
 
     timeStepDict = {
-        0: 2_000_000,
-        1: 4_000_000,
-        2: 6_000_000,
-        3: 8_000_000,
-        4: 8_000_000,
+        0: 500_000,
+        1: 1_000_000,
+        2: 500_000,
+        3: 1_000_000,
     }
     #overnight or rightnow
     state = 'rightnow' 
     if state == 'overnight':
-        for i in range(5):
-            print(f"line1242: currently at checkpoint: {i}")
+        for i in range(4):
+            with open("progress_report.py", "w") as f:
+                f.write(f"currently at checkpoint: {i}")
             # Reward manager
             reward_manager = gen_reward_manager(i)
 
@@ -1356,5 +1303,6 @@ if __name__ == '__main__':
             opponent_cfg,
             CameraResolution.LOW,
             train_timesteps=timeStepDict[RUN],  # Continue training (total 15M from start)
-            train_logging=TrainLogging.PLOT
+            train_logging=TrainLogging.PLOT,
+            spawners=False
         )
