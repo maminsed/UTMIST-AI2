@@ -533,7 +533,7 @@ class Camera():
     is_rendering: bool = False
     space: pymunk.Space
     pos: list[int] = [0,0]
-    zoom: float = 2.0
+    zoom: float = 0.8
 
     def scale_background(self, env, bg_image: pygame.image = pygame.image.load('environment/assets/map/background.png')) -> None:
         resolution: Tuple[int] = env.resolution
