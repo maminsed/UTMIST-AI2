@@ -1043,11 +1043,11 @@ def train(agent: Agent,
         # Logs will be saved in log_dir/monitor.csv
         env = Monitor(env, log_dir)
 
-    base_env = env.unwrapped if hasattr(env, 'unwrapped') else env
     try:
-        agent.get_env_info(base_env)
+        agent.get_env_info(env)
+        base_env = env.unwrapped if hasattr(env, 'unwrapped') else env
         base_env.on_training_start()
-        agent.learn(env, total_timesteps=train_timesteps, verbose=1)
+        agent.learn(env, total_timesteps=train_timesteps, verbose=0)
         base_env.on_training_end()
     except KeyboardInterrupt:
         if save_handler is not None:
