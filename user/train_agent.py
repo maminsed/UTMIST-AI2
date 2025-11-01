@@ -1075,12 +1075,28 @@ Add your dictionary of RewardFunctions here using RewTerms
 '''
 def gen_reward_manager(numCheckpoint:int):
     checkPointDict = {
-        0: {
+        0:{
+            'damage_interaction_reward': 0.0,
+            'advantage_state_reward': 0.0,
+            'whiff_punishment_reward': 0.0,
+            'weapon_stability_reward': 0.0,
+            # 'proximity_to_opponent_reward': 2.0,
+            'head_to_opponent': 8.0,
+            'jumping_on_middle': 0.0,
+            'bad_taunt': 0.0,
+            'no_input_penalty': 0.0,
+            'on_win_reward': 0.0,
+            'on_knockout_reward': 0.0,
+            'on_combo_reward': 0.0,
+            'on_equip_reward': 0.0,
+            'on_drop_reward': 0.0
+        },
+        0.5: {
             'damage_interaction_reward': 10.0,
             'advantage_state_reward': 0.0,
             'whiff_punishment_reward': 0.0,
             'weapon_stability_reward': 0.0,
-            'proximity_to_opponent_reward': 2.0,
+            # 'proximity_to_opponent_reward': 2.0,
             'head_to_opponent': 4.0,
             'jumping_on_middle': 2.0,
             'bad_taunt': 2.0,
@@ -1096,7 +1112,7 @@ def gen_reward_manager(numCheckpoint:int):
             'advantage_state_reward': 0.0,
             'whiff_punishment_reward': 2.0,
             'weapon_stability_reward': 0.0,
-            'proximity_to_opponent_reward': 2.0,
+            # 'proximity_to_opponent_reward': 2.0,
             'head_to_opponent': 6.0,
             'jumping_on_middle': 1.0,
             'no_input_penalty': 0.01,
@@ -1111,7 +1127,7 @@ def gen_reward_manager(numCheckpoint:int):
             'advantage_state_reward': 0.0,
             'whiff_punishment_reward': 4.0,
             'weapon_stability_reward': 5.0,
-            'proximity_to_opponent_reward': 0.5,
+            # 'proximity_to_opponent_reward': 0.5,
             'head_to_opponent': 4.0,
             'jumping_on_middle': 0.5,
             'on_win_reward': 100,
@@ -1125,7 +1141,7 @@ def gen_reward_manager(numCheckpoint:int):
             'advantage_state_reward': 2.0,
             'whiff_punishment_reward': 1.0,
             'weapon_stability_reward': 5.0,
-            'proximity_to_opponent_reward': 0.5,
+            # 'proximity_to_opponent_reward': 0.5,
             'head_to_opponent': 4.0,
             'jumping_on_middle': 0.01,
             'on_win_reward': 100,
@@ -1301,7 +1317,7 @@ if __name__ == '__main__':
                 train_logging=TrainLogging.PLOT
             )
     elif state == 'rightnow':
-        RUN = 2
+        RUN = 0
         reward_manager = gen_reward_manager(RUN)
 
         opponent_cfg = OpponentsCfg(opponents=opponent_specDict[RUN])
