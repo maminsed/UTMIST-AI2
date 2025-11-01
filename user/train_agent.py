@@ -13,6 +13,7 @@ b) Continue training from a specific timestep given an input `file_path`
 # ----------------------------- IMPORTS -----------------------------
 # -------------------------------------------------------------------
 
+from types import NoneType
 import torch 
 import gymnasium as gym
 from torch.nn import functional as F
@@ -554,16 +555,18 @@ def clip_reward(reward: float, min_val: float = -0.2, max_val: float = 0.2) -> f
 def phi_distance(p_x,p_y,o_x,o_y):
     dx, dy = p_x - o_x, p_y - o_y
     dist = (dx*dx + dy*dy) ** 0.5
-    return -dist
+    return dist
 
 def head_to_opponent(
     env: WarehouseBrawl,
 ) -> float:
     player = env.objects['player']
     opponent = env.objects['opponent']
-    currDist = phi_distance(player.body.position.x, player.body.position.y,opponent.body.position.x,opponent.body.position.y)
-    prevDist = phi_distance(player.prev_x, player.prev_y,opponent.prev_x,opponent.prev_y)
-    return  env.dt * clip_reward(prevDist-currDist,-1,1)
+    curr = phi_distance(player.body.position.x, player.body.position.y,opponent.body.position.x,opponent.body.position.y)
+    prev = phi_distance(player.prev_x, player.prev_y,opponent.prev_x,opponent.prev_y)
+    frac_progress = (prev - curr) / max(prev, 1e-6)
+    shaped = np.tanh(5.0 * frac_progress)
+    return env.dt * shaped
 
 def on_win_reward(env: WarehouseBrawl, agent: str) -> float:
     #favouring early wins and penilizing early looses
@@ -1213,7 +1216,8 @@ if __name__ == '__main__':
     # my_agent = CustomAgent(sb3_class=QRDQN, extractor=MLPExtractor)
     
     # OR: Continue from checkpoint (only if you want to try adapting old behavior):
-    my_agent = CustomAgent(sb3_class=PPO, file_path="checkpoints/AMIN_DUMB_AF_2/rl_model_501760_steps.zip", extractor=MLPWithLayerNorm)
+    # my_agent = CustomAgent(sb3_class=PPO, file_path="checkpoints/AMIN_DUMB_AF_2/rl_model_501760_steps.zip", extractor=MLPWithLayerNorm)
+    my_agent = CustomAgent(sb3_class=PPO, file_path=None, extractor=MLPWithLayerNorm)
 
     # Start here if you want to train from scratch. e.g:
     #my_agent = RecurrentPPOAgent()
@@ -1237,13 +1241,13 @@ if __name__ == '__main__':
         save_freq=50_000, # Save frequency - more frequent to catch good models
         max_saved=40, # Maximum number of saved models
         save_path='checkpoints', # Save path
-        run_name='AMIN_DUMB_AF_2_2',  # Fresh training with aggressive chase + no whiffs
+        run_name='AMIN_DUMB_AF_4',  # Fresh training with aggressive chase + no whiffs
         mode=SaveHandlerMode.RESUME  # Start completely fresh
     )
 
     # Set opponent settings here:
     opponent_spec0 = {
-                    'self_play': (6, selfplay_handler),
+                    'self_play': (0, selfplay_handler),
                     'self_play_random': (0,selfplay_random),
                     'constant_agent': (14, partial(ConstantAgent)),
                     'easy_hard_coded_bot': (0, partial(EasyHardCodedBot)),
