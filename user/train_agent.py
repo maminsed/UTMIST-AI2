@@ -423,7 +423,7 @@ class CustomAgent(Agent):
             print(f"Using device: {device}")
             
             # Wrap env in BoxToMultiBinary10 for proper action space
-            wrapped_env = BoxToMultiBinary10(self.env)
+            
             
             policy_kwargs=dict(
                 features_extractor_class=MLPWithLayerNorm,
@@ -465,7 +465,7 @@ class CustomAgent(Agent):
         self.model.save(file_path, include=['num_timesteps'])
 
     def learn(self, env, total_timesteps, log_interval: int = 1, verbose=0):
-        self.model.set_env(BoxToMultiBinary10(env))
+        self.model.set_env(env)
         self.model.verbose = verbose
         self.model.learn(
             total_timesteps=total_timesteps,
@@ -752,9 +752,9 @@ def no_input_penalty(env: WarehouseBrawl) -> float:
     prev_x = player.prev_x
     prev_y = player.prev_y
     dist = (x-prev_x)**2 + (y-prev_y) ** 2
-    if dist > 0.1:
-        return min(dist * 0.1,0.5) * env.dt
-    return -0.1 * env.dt 
+    if dist < 0.02:
+        return -0.02 * env.dt
+    return 0.0 
 
 state_mapping = [
     'WalkingState',

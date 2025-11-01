@@ -37,6 +37,8 @@ from IPython.display import Video
 
 from stable_baselines3.common.monitor import Monitor
 
+from user.train_agent import BoxToMultiBinary10
+
 
 # ## Agents
 
@@ -968,7 +970,9 @@ class RecurrentPPOAgent(Agent):
 
 
 from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
 from stable_baselines3.common.results_plotter import load_results, ts2xy
+import copy
 
 class TrainLogging(Enum):
     NONE = 0
@@ -999,6 +1003,68 @@ def plot_results(log_folder, title="Learning Curve"):
     # save to file
     plt.savefig(log_folder + title + ".png")
 
+
+def get_log_dir(save_handler,rank):
+    # Create log dir
+    log_dir = f"{save_handler._experiment_path()}/" if save_handler is not None else "/tmp/gym/"
+    os.makedirs(log_dir, exist_ok=True)
+
+    # Preserve existing monitor.csv if it exists
+    monitor_file = os.path.join(log_dir, f"monitor_{rank}.csv")
+    backup_file = os.path.join(log_dir, "monitor_backup.txt")
+    
+    # Backup existing monitor.csv before Monitor potentially overwrites it
+    # Append to backup file instead of overwriting to preserve history
+    if os.path.exists(monitor_file):
+        try:
+            with open(monitor_file, 'r') as f_in:
+                content = f_in.read()
+            # Append to backup file with a separator
+            with open(backup_file, 'a') as f_out:
+                f_out.write(f"\n{'='*80}\n")
+                f_out.write(f"Backup at: {os.path.basename(log_dir)}_{rank} - Checkpoint initialization\n")
+                f_out.write(f"{'='*80}\n")
+                f_out.write(content)
+                f_out.write("\n")
+            print(f"Appended existing monitor.csv to {backup_file}")
+        except Exception as e:
+            print(f"Warning: Could not backup monitor.csv: {e}")
+    return log_dir
+
+def make_env(
+        rank,
+        reward_manager,
+        opponent_cfg,save_handler,
+        resolution: CameraResolution=CameraResolution.LOW,
+        train_logging: TrainLogging=TrainLogging.PLOT):
+    def _thunk():
+        # IMPORTANT: create per-env copies of configs if they are mutable/not picklable
+        rm = copy.deepcopy(reward_manager)         # or build a new one if deepcopy fails
+        oc = copy.deepcopy(opponent_cfg)           # opponent/self-play state should be per-env
+        sh = copy.deepcopy(save_handler) if save_handler is not None else None
+
+        env = SelfPlayWarehouseBrawl(
+            reward_manager=rm,
+            opponent_cfg=oc,
+            save_handler=sh,
+            resolution=resolution,
+        )
+        if hasattr(env, "raw_env"):
+            rm.subscribe_signals(env.raw_env)
+
+
+        if train_logging != TrainLogging.NONE:
+            log_dir = get_log_dir(save_handler)
+
+            # Logs will be saved in log_dir/monitor.csv
+            env = Monitor(env, log_dir)
+        
+        env = BoxToMultiBinary10(env)
+
+        return env
+    return _thunk
+
+NUM_ENVS = 8
 def train(agent: Agent,
           reward_manager: RewardManager,
           save_handler: Optional[SaveHandler]=None,
@@ -1007,54 +1073,55 @@ def train(agent: Agent,
           train_timesteps: int=400_000,
           train_logging: TrainLogging=TrainLogging.PLOT
           ):
+    thunks = [make_env(i, reward_manager,opponent_cfg,save_handler,resolution,train_logging) for i in range(NUM_ENVS)]
     # Create environment
-    env = SelfPlayWarehouseBrawl(reward_manager=reward_manager,
-                                 opponent_cfg=opponent_cfg,
-                                 save_handler=save_handler,
-                                 resolution=resolution
-                                 )
-    reward_manager.subscribe_signals(env.raw_env)
-    if train_logging != TrainLogging.NONE:
-        # Create log dir
-        log_dir = f"{save_handler._experiment_path()}/" if save_handler is not None else "/tmp/gym/"
-        os.makedirs(log_dir, exist_ok=True)
+    # env = SelfPlayWarehouseBrawl(reward_manager=reward_manager,
+    #                              opponent_cfg=opponent_cfg,
+    #                              save_handler=save_handler,
+    #                              resolution=resolution
+    #                              )
+    # reward_manager.subscribe_signals(env.raw_env)
+    # if train_logging != TrainLogging.NONE:
+    #     # Create log dir
+    #     log_dir = f"{save_handler._experiment_path()}/" if save_handler is not None else "/tmp/gym/"
+    #     os.makedirs(log_dir, exist_ok=True)
 
-        # Preserve existing monitor.csv if it exists
-        monitor_file = os.path.join(log_dir, "monitor.csv")
-        backup_file = os.path.join(log_dir, "monitor_backup.txt")
+    #     # Preserve existing monitor.csv if it exists
+    #     monitor_file = os.path.join(log_dir, "monitor.csv")
+    #     backup_file = os.path.join(log_dir, "monitor_backup.txt")
         
-        # Backup existing monitor.csv before Monitor potentially overwrites it
-        # Append to backup file instead of overwriting to preserve history
-        if os.path.exists(monitor_file):
-            try:
-                with open(monitor_file, 'r') as f_in:
-                    content = f_in.read()
-                # Append to backup file with a separator
-                with open(backup_file, 'a') as f_out:
-                    f_out.write(f"\n{'='*80}\n")
-                    f_out.write(f"Backup at: {os.path.basename(log_dir)} - Checkpoint initialization\n")
-                    f_out.write(f"{'='*80}\n")
-                    f_out.write(content)
-                    f_out.write("\n")
-                print(f"Appended existing monitor.csv to {backup_file}")
-            except Exception as e:
-                print(f"Warning: Could not backup monitor.csv: {e}")
+    #     # Backup existing monitor.csv before Monitor potentially overwrites it
+    #     # Append to backup file instead of overwriting to preserve history
+    #     if os.path.exists(monitor_file):
+    #         try:
+    #             with open(monitor_file, 'r') as f_in:
+    #                 content = f_in.read()
+    #             # Append to backup file with a separator
+    #             with open(backup_file, 'a') as f_out:
+    #                 f_out.write(f"\n{'='*80}\n")
+    #                 f_out.write(f"Backup at: {os.path.basename(log_dir)} - Checkpoint initialization\n")
+    #                 f_out.write(f"{'='*80}\n")
+    #                 f_out.write(content)
+    #                 f_out.write("\n")
+    #             print(f"Appended existing monitor.csv to {backup_file}")
+    #         except Exception as e:
+    #             print(f"Warning: Could not backup monitor.csv: {e}")
 
-        # Logs will be saved in log_dir/monitor.csv
-        env = Monitor(env, log_dir)
+    #     # Logs will be saved in log_dir/monitor.csv
+    #     env = Monitor(env, log_dir)
 
-    base_env = env.unwrapped if hasattr(env, 'unwrapped') else env
+    venv = DummyVecEnv(thunks)
     try:
-        agent.get_env_info(base_env)
-        base_env.on_training_start()
-        agent.learn(env, total_timesteps=train_timesteps, verbose=1)
-        base_env.on_training_end()
+        agent.get_env_info(venv)
+        venv.env_method("on_training_start")
+        agent.learn(venv,total_timesteps=train_timesteps, verbose=0)
+        venv.env_method("on_training_end")
     except KeyboardInterrupt:
         if save_handler is not None:
             save_handler.agent.update_num_timesteps(save_handler.num_timesteps)
             save_handler.save_agent()
 
-    env.close()
+    venv.close()
 
     if save_handler is not None:
         save_handler.save_agent()
@@ -1062,22 +1129,24 @@ def train(agent: Agent,
     # Final backup of monitor.csv after training completes
     # Append to backup file to preserve history
     if train_logging != TrainLogging.NONE:
-        monitor_file = os.path.join(log_dir, "monitor.csv")
-        backup_file = os.path.join(log_dir, "monitor_backup.txt")
-        if os.path.exists(monitor_file):
-            try:
-                with open(monitor_file, 'r') as f_in:
-                    content = f_in.read()
-                # Append to backup file with a separator
-                with open(backup_file, 'a') as f_out:
-                    f_out.write(f"\n{'='*80}\n")
-                    f_out.write(f"Backup at: {os.path.basename(log_dir)} - Training completed\n")
-                    f_out.write(f"{'='*80}\n")
-                    f_out.write(content)
-                    f_out.write("\n")
-                print(f"Appended final backup of monitor.csv to {backup_file}")
-            except Exception as e:
-                print(f"Warning: Could not create final backup: {e}")
+        for rank in range(NUM_ENVS):
+            log_dir = get_log_dir(save_handler,rank)
+            monitor_file = os.path.join(log_dir, f"monitor_{rank}.csv")
+            backup_file = os.path.join(log_dir, "monitor_backup.txt")
+            if os.path.exists(monitor_file):
+                try:
+                    with open(monitor_file, 'r') as f_in:
+                        content = f_in.read()
+                    # Append to backup file with a separator
+                    with open(backup_file, 'a') as f_out:
+                        f_out.write(f"\n{'='*80}\n")
+                        f_out.write(f"Backup at: {os.path.basename(log_dir)}_{rank} - Training completed\n")
+                        f_out.write(f"{'='*80}\n")
+                        f_out.write(content)
+                        f_out.write("\n")
+                    print(f"Appended final backup of monitor.csv to {backup_file}")
+                except Exception as e:
+                    print(f"Warning: Could not create final backup: {e}")
 
     if train_logging == TrainLogging.PLOT:
         plot_results(log_dir)
