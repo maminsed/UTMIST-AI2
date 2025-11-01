@@ -8,7 +8,7 @@ pygame.init()
 my_agent = UserInputAgent()
 
 #Input your file path here in SubmittedAgent if you are loading a model:
-opponent = SubmittedAgent(file_path=r'checkpoints\z3\rl_model_1773387_steps.zip')
+opponent = SubmittedAgent(file_path=r'checkpoints\z4\rl_model_2275147_steps.zip')
 # opponent = HardHardCodedBot()
 
 
