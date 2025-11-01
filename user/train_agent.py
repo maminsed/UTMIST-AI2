@@ -14,7 +14,7 @@ b) Continue training from a specific timestep given an input `file_path`
 # -------------------------------------------------------------------
 
 from types import NoneType
-import torch 
+import torch; torch.set_float32_matmul_precision('high')
 import gymnasium as gym
 from torch.nn import functional as F
 from torch import nn as nn
@@ -432,9 +432,9 @@ class CustomAgent(Agent):
             self.model = self.sb3_class(
                 "MlpPolicy", 
                     wrapped_env, 
-                    n_steps=2048,          # rollout length per update
-                    batch_size=256,        # minibatch size
-                    n_epochs=10,       # updates per batch
+                    n_steps=1024,          # rollout length per update
+                    batch_size=128,        # minibatch size (2048 disables minibatching!)
+                    n_epochs=4,       # updates per batch
                     gamma=0.995,
                     gae_lambda=0.95,
                     clip_range=0.2,
@@ -1263,10 +1263,10 @@ if __name__ == '__main__':
     # Set save settings here:
     save_handler = SaveHandler(
         agent=my_agent, # Agent to save
-        save_freq=50_000, # Save frequency - more frequent to catch good models
+        save_freq=200_000, # Save frequency - more frequent to catch good models
         max_saved=40, # Maximum number of saved models
         save_path='checkpoints', # Save path
-        run_name='AMIN_DUMB_AF_4',  # Fresh training with aggressive chase + no whiffs
+        run_name='AMIN_DUMB_AF_6',  # Fresh training with aggressive chase + no whiffs
         mode=SaveHandlerMode.RESUME  # Start completely fresh
     )
 
@@ -1324,8 +1324,8 @@ if __name__ == '__main__':
         0: 2_000_000,
         1: 4_000_000,
         2: 6_000_000,
-        3: 12_000_000,
-        4: 10_000_000,
+        3: 8_000_000,
+        4: 8_000_000,
     }
     #overnight or rightnow
     state = 'rightnow' 
