@@ -1048,7 +1048,7 @@ def train(agent: Agent,
 import pygame
 from pygame.locals import QUIT
 
-def run_real_time_match(agent_1: Agent, agent_2: Agent, max_timesteps=30*90, resolution=CameraResolution.HIGH):
+def run_real_time_match(agent_1: Agent, agent_2: Agent, max_timesteps=30*900, resolution=CameraResolution.HIGH):
     pygame.init()
 
     pygame.mixer.init()
@@ -1090,7 +1090,7 @@ def run_real_time_match(agent_1: Agent, agent_2: Agent, max_timesteps=30*90, res
    # platform1 = env.objects["platform1"] #mohamed
     #stage2 = env.objects["stage2"]
     background_image = pygame.image.load('environment/assets/map/bg.jpg').convert() 
-    while running and timestep < max_timesteps:
+    while running and timestep < 2147000000:
        
         # Pygame event to handle real-time user input 
        
@@ -1140,6 +1140,8 @@ def run_real_time_match(agent_1: Agent, agent_2: Agent, max_timesteps=30*90, res
         result = Result.LOSS
     else:
         result = Result.DRAW
+
+    print(result)
     
     match_stats = MatchStats(
         match_time=timestep / 30.0,
