@@ -707,13 +707,15 @@ class DoNotFallAgent(Agent):
     def predict(self, obs):
         pos = self.obs_helper.get_section(obs, 'player_pos')
         if pos[0] < -6.9:
-            action = self.act_helper.press_keys(['space','d'], action)
+            action = self.act_helper.press_keys(['space','d'])
         elif pos[0] > -1.9 and pos[0] < 0:
-            action = self.act_helper.press_keys(['space','a'], action)
+            action = self.act_helper.press_keys(['space','a'])
         elif pos[0] > 0 and pos[0] < 1.9:
-            action = self.act_helper.press_keys(['space','d'], action)
+            action = self.act_helper.press_keys(['space','d'])
         elif pos[0] > 6.9:
-            action = self.act_helper.press_keys(['space','a'], action)
+            action = self.act_helper.press_keys(['space','a'])
+        else:
+            action = self.act_helper.zeros()
         return action
 
 class ConstantAgent(Agent):

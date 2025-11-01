@@ -177,6 +177,7 @@ class HardHardCodedBot(Agent):
     '''
     Input the **file_path** to your agent here for submission!
     '''
+
     def __init__(
             self,
             *args,
@@ -196,34 +197,45 @@ class HardHardCodedBot(Agent):
         action = self.act_helper.zeros()
         facing = self.obs_helper.get_section(obs, 'player_facing')
 
+        # spawners = self.env.unwrapped.get_spawner_info()
+
+        # pick up a weapon if near
+        '''
+        if self.obs_helper.get_section(obs, 'player_weapon_type') == 0:
+            for w in spawners:
+                if euclid(pos, w[1]) < 3:
+                    action = self.act_helper.press_keys(['h'], action)
+        '''
+                    
+        # emote for fun
+        if self.time == 10 or self.obs_helper.get_section(obs, 'opponent_stocks') == 0:
+            action = self.act_helper.press_keys(['g'], action)
+            return action
+
         if self.prev_pos is not None:
             self.down = (pos[1] - self.prev_pos[1]) > 0
         self.prev_pos = pos
 
         self.recover = False
-        if pos[0] < -6.9:
+        if pos[0] < -4.8:
             action = self.act_helper.press_keys(['d'], action)
             self.recover = True
-        elif pos[0] > -1.9 and pos[0] < 0:
+        elif pos[0] > -4.2 and pos[0] < 0:
             action = self.act_helper.press_keys(['a'], action)
             self.recover = True
-        elif pos[0] > 0 and pos[0] < 1.9:
+        elif pos[0] > 0 and pos[0] < 4.2:
             action = self.act_helper.press_keys(['d'], action)
             self.recover = True
-        elif pos[0] > 6.9:
+        elif pos[0] > 4.8:
             action = self.act_helper.press_keys(['a'], action)
             self.recover = True
 
         # Jump if falling
-        if self.down or self.obs_helper.get_section(obs, 'player_grounded') == 1:
-            '''
-            if self.obs_helper.get_section(obs, "player_recoveries_left") > 0:
-                action = self.act_helper.press_keys(['k'], action)
-            else:
-                action = self.act_helper.press_keys(['space'], action)
-            '''
+        if pos[1] > -5 and (self.down or self.obs_helper.get_section(obs, 'player_grounded') == 1):
             if self.time % 10 == 0:
                 action = self.act_helper.press_keys(['space'], action)
+            if self.recover and self.obs_helper.get_section(obs, 'player_grounded') == 0 and self.obs_helper.get_section(obs, 'player_jumps_left') == 0 and self.obs_helper.get_section(obs, 'player_recoveries_left') == 1 and self.time % 2 == 0:
+                action = self.act_helper.press_keys(['k'], action)
 
         
         if not self.recover:
@@ -234,9 +246,16 @@ class HardHardCodedBot(Agent):
         
                 
         # Attack if near
-        if not self.recover and (pos[0] - opp_pos[0])**2 + (pos[1] - opp_pos[1])**2 < 4.0:
+        if not self.recover and abs(pos[0] - opp_pos[0]) < 0.45 and pos[1] < opp_pos[1]:
+            action = self.act_helper.press_keys(['s'], action)
+            action = self.act_helper.press_keys(['k'], action)
+        elif not self.recover and euclid(pos, opp_pos) < 3:
             action = self.act_helper.press_keys(['j'], action)
+
         return action
+
+def euclid (a, b):
+    return (a[0] - b[0])**2 + (a[1] - b[1])**2
 
 class UserInputAgent(Agent):
     '''
@@ -832,10 +851,12 @@ def danger_zone_reward(
     # Get player object from the environment
     player: Player = env.objects["player"]
 
-    # Apply penalty if the player is in the danger zone
-    reward = -zone_penalty if player.body.position.y >= zone_height else 0.0
+    player_x = player.body.position.x
+    player_y = player.body.position.y
 
-    return reward * env.dt
+    if (player_x <= -6.9 or player_x >= 6.9) and (player_y >= 3):
+        return -0.2 * env.dt
+    return 0.0
 
 def in_state_reward(
     env: WarehouseBrawl,
@@ -1106,7 +1127,7 @@ def gen_reward_manager(numCheckpoint:int):
             'advantage_state_reward': 0.0,
             'whiff_punishment_reward': 2.0,
             'weapon_stability_reward': 0.0,
-            'head_to_opponent': 1.0,
+            'head_to_opponent': 2.0,
             'jumping_on_middle': 1.0,
             'bad_taunt': 0.005,
             'no_input_penalty': 0.4,
@@ -1122,9 +1143,10 @@ def gen_reward_manager(numCheckpoint:int):
             'advantage_state_reward': 0.0,
             'whiff_punishment_reward': 2.5,
             'weapon_stability_reward': 0.1,
-            'head_to_opponent': 2.0,
-            'jumping_on_middle': 1.0,
+            'head_to_opponent': 4.0,
+            'jumping_on_middle': 0,
             'bad_taunt': 0.0,
+            'danger_zone_reward': 2.0,
             'no_input_penalty': 0.2,
             'on_win_reward': 8.0,
             'on_knockout_reward': 7.0,
@@ -1179,7 +1201,7 @@ def gen_reward_manager(numCheckpoint:int):
         # 'survival_bonus': RewTerm(func=survival_bonus, weight=currCheckPoint.get('survival_bonus', 0.0)),
         # INCREASED: Retreat penalty - stop running away, engage!
         # 'retreat_penalty': RewTerm(func=retreat_penalty, weight=currCheckPoint.get('retreat_penalty', 0.0)),
-        # 'danger_zone_reward': RewTerm(func=danger_zone_reward, weight=currCheckPoint.get('danger_zone_reward', 0.0)),
+        'danger_zone_reward': RewTerm(func=danger_zone_reward, weight=currCheckPoint.get('danger_zone_reward', 0.0)),
         # 'penalize_attack_reward': RewTerm(func=in_state_reward, weight=currCheckPoint.get('penalize_attack_reward', 0.0)),
         # 'holding_more_than_3_keys': RewTerm(func=holding_more_than_3_keys, weight=currCheckPoint.get('holding_more_than_3_keys', 0.0)),
     }
@@ -1212,7 +1234,7 @@ if __name__ == '__main__':
     
     # OR: Continue from checkpoint (only if you want to try adapting old behavior):
     # my_agent = CustomAgent(sb3_class=PPO, file_path="checkpoints/AMIN_DUMB_AF_2/rl_model_501760_steps.zip", extractor=MLPWithLayerNorm)
-    my_agent = CustomAgent(sb3_class=PPO, file_path="checkpoints/AMIN_DUMB_AF_6/rl_model_2000896_steps.zip", extractor=MLPWithLayerNorm)
+    my_agent = CustomAgent(sb3_class=PPO, file_path="checkpoints/z3/rl_model_1773387_steps.zip", extractor=MLPWithLayerNorm)
 
     # Start here if you want to train from scratch. e.g:
     #my_agent = RecurrentPPOAgent()
@@ -1233,10 +1255,10 @@ if __name__ == '__main__':
     # Set save settings here:
     save_handler = SaveHandler(
         agent=my_agent, # Agent to save
-        save_freq=200_000, # Save frequency - more frequent to catch good models
+        save_freq=250_000, # Save frequency - more frequent to catch good models
         max_saved=40, # Maximum number of saved models
         save_path='checkpoints', # Save path
-        run_name='AMIN_DUMB_AF_7',  # Fresh training with aggressive chase + no whiffs
+        run_name='z4',  # Fresh training with aggressive chase + no whiffs
         mode=SaveHandlerMode.RESUME  # Start completely fresh
     )
 
@@ -1255,7 +1277,7 @@ if __name__ == '__main__':
     
     opponent_spec2 = {
         'self_play': (15, selfplay_handler),
-        'easy_hard_coded_bot': (5, partial(EasyHardCodedBot)),
+        'hard_hard_coded_bot': (5,partial(HardHardCodedBot))
     }   
 
     opponent_spec3 = {
@@ -1279,7 +1301,7 @@ if __name__ == '__main__':
         3: 1_000_000,
     }
     #overnight or rightnow
-    state = 'overnight' 
+    state = 'rightnow' 
     if state == 'overnight':
         for i in range(4):
             with open("progress_report.py", "w") as f:
@@ -1302,7 +1324,7 @@ if __name__ == '__main__':
                 spawners=spawners
             )
     elif state == 'rightnow':
-        RUN = 0
+        RUN = 2
         reward_manager = gen_reward_manager(RUN)
 
         opponent_cfg = OpponentsCfg(opponents=opponent_specDict[RUN])
@@ -1313,5 +1335,5 @@ if __name__ == '__main__':
             CameraResolution.LOW,
             train_timesteps=timeStepDict[RUN],  # Continue training (total 15M from start)
             train_logging=TrainLogging.PLOT,
-            spawners=False
+            spawners= True 
         )
