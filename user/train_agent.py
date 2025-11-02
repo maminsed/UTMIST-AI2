@@ -765,13 +765,22 @@ def no_input_penalty(env: WarehouseBrawl) -> float:
     Punishes for not moving too much
     """
     player:Player = env.objects["player"]
+    opponent = env.objects["opponent"]
     x = player.body.position.x
     y = player.body.position.y
+
+    opp_x = opponent.body.position.x
+    opp_y = opponent.body.position.y
+    
+
     prev_x = player.prev_x
     prev_y = player.prev_y
+
     dist = (x-prev_x)**2 + (y-prev_y) ** 2
-    if player.state == InAirState or dist >= 0.0003:
+    players_dist = (x-opp_x) ** 2 + (y-opp_y)**2
+    if player.state == InAirState or dist >= 0.0003 or players_dist <= 3.0:
         return 0
+    print(f"player dist is: {players_dist}")
     return -0.1 * env.dt
 
 def facing_opponent_reward(env: WarehouseBrawl) -> float:
@@ -1194,7 +1203,7 @@ def gen_reward_manager(numCheckpoint:int):
             'no_input_penalty': 1.0,
             'on_win_reward': 8.5,
             'on_knockout_reward': 7.5,
-            'on_combo_reward': 2.0,
+            'on_combo_reward': 0.0,
             'on_equip_reward': 1.0,
             'on_drop_reward': 1.0,
             'facing_opponent_reward': 2.0,
