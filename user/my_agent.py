@@ -49,6 +49,12 @@ class SubmittedAgent(Agent):
         action = self.act_helper.zeros()
         facing = self.obs_helper.get_section(obs, 'player_facing')
 
+        opp_grounded = self.obs_helper.get_section(obs, 'opponent_grounded')
+        opp_state = self.obs_helper.get_section(obs, 'opponent_state')
+        opp_move_type = self.obs_helper.get_section(obs, 'opponent_move_type')
+
+        is_opponent_spamming = opp_grounded == 1 and opp_state == 8 and opp_move_type > 0
+
         spawners = self.env.get_spawner_info()
 
         # pick up a weapon if near
@@ -83,7 +89,7 @@ class SubmittedAgent(Agent):
             self.recover = True
 
         # Jump if falling
-        if pos[1] > -5 and (self.down or self.obs_helper.get_section(obs, 'player_grounded') == 1):
+        if pos[1] > -5 and (self.down or (self.obs_helper.get_section(obs, 'player_grounded') == 1) and not is_opponent_spamming):
             if self.time % 10 == 0:
                 action = self.act_helper.press_keys(['space'], action)
             if self.recover and self.obs_helper.get_section(obs, 'player_grounded') == 0 and self.obs_helper.get_section(obs, 'player_jumps_left') == 0 and self.obs_helper.get_section(obs, 'player_recoveries_left') == 1 and self.time % 2 == 0:
@@ -91,17 +97,17 @@ class SubmittedAgent(Agent):
 
         
         if not self.recover:
-            if opp_pos[0] > pos[0] and facing == 0:
+            if opp_pos[0] > pos[0]:
                 action = self.act_helper.press_keys(['d'], action)
-            elif opp_pos[0] < pos[0] and facing == 1:
+            elif opp_pos[0] < pos[0]:
                 action = self.act_helper.press_keys(['a'], action)
         
                 
         # Attack if near
-        if not self.recover and abs(pos[0] - opp_pos[0]) < 0.45 and pos[1] < opp_pos[1]:
+        if not self.recover and abs(pos[0] - opp_pos[0]) < 0.5 and pos[1] < opp_pos[1]:
             action = self.act_helper.press_keys(['s'], action)
             action = self.act_helper.press_keys(['k'], action)
-        elif not self.recover and euclid(pos, opp_pos) < 3:
+        elif not self.recover and euclid(pos, opp_pos) < 4:
             action = self.act_helper.press_keys(['j'], action)
 
         return action
