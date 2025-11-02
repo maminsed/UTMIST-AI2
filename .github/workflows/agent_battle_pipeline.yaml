@@ -26,12 +26,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: check-inputs
     container:
-      image: python:3.10
+      image: python:3.12
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-
     steps:
       # Step 1: Checkout the main repo
       - name: Checkout main repo
@@ -44,6 +42,7 @@ jobs:
         run: |
           chmod +x install.sh
           ./install.sh
+
       # Step 3: Check both participants have passed validation (via api.py)
       - name: Check participants' validation status server-side
         id: check-validation
