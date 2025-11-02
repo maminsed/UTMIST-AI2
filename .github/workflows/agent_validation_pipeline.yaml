@@ -23,6 +23,9 @@ jobs:
     runs-on: self-hosted
     container:
       image: python:3.10
+      options: >-
+        --device /dev/tenstorrent
+        -v /dev/hugepages-1G:/dev/hugepages-1G
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
@@ -71,6 +74,8 @@ jobs:
           echo "PWD=$(pwd)"
           echo "Listing validate target:"
           ls -la user/validate.py || true
+          echo "Removing rl-model.zip if it exists"
+          rm -f rl-model.zip
           echo "Isolating PYTHONPATH to submission only"
           export PYTHONPATH="$(pwd)"
           python - <<'PY'

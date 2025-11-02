@@ -77,4 +77,6 @@ fi
 
 python -m pip install ttnn
 
+python -m pip install numpy==2.1.1
+
 echo "✅ Installation complete."

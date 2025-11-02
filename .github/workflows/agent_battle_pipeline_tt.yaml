@@ -1,0 +1,101 @@
+name: RL Tournament Battle Tenstorrent Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      username1:
+        description: 'GitHub username of first participant (fork owner)'
+        required: true
+      username2:
+        description: 'GitHub username of second participant (fork owner)'
+        required: true
+
+jobs:
+  check-inputs:
+    name: Validate Inputs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate usernames
+        run: |
+          if [ "${{ github.event.inputs.username1 }}" = "${{ github.event.inputs.username2 }}" ]; then
+            echo "Error: Usernames must be different."
+          fi
+
+  battle:
+    name: Battle
+    runs-on: self-hosted
+    needs: check-inputs
+    container:
+      image: python:3.10
+      options: >-
+        --device /dev/tenstorrent
+        -v /dev/hugepages-1G:/dev/hugepages-1G
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      # Step 1: Checkout the main repo
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      # Step 2: Install dependencies
+      - name: Install dependencies
+        run: |
+          chmod +x install_tt.sh
+          ./install_tt.sh
+
+      # Step 3: Check both participants have passed validation (via api.py)
+      - name: Check participants' validation status server-side
+        id: check-validation
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          USERNAME1: ${{ github.event.inputs.username1 }}
+          USERNAME2: ${{ github.event.inputs.username2 }}
+        run: |
+          python3 -c "
+          import sys
+          sys.path.insert(0, 'server')
+          import api
+          u1 = '${{ github.event.inputs.username1 }}'
+          u2 = '${{ github.event.inputs.username2 }}'
+          if not api.validate_battle(u1, u2):
+            print(f'Validation failed: One or both users have not passed validation (u1={u1}, u2={u2})')
+            sys.exit(1)
+          else:
+            print(f'Validation passed: Both users have passed validation (u1={u1}, u2={u2})')
+          "
+
+      # Step 4: Clone participant forks
+      - name: Clone forks
+        run: |
+          echo "Cloning fork for ${{ github.event.inputs.username1 }}"
+          git clone "https://github.com/${{ github.event.inputs.username1 }}/$(basename $GITHUB_REPOSITORY)" fork1
+
+          echo "Cloning fork for ${{ github.event.inputs.username2 }}"
+          git clone "https://github.com/${{ github.event.inputs.username2 }}/$(basename $GITHUB_REPOSITORY)" fork2
+
+      # Step 5: Copy each agent to main repo under `agents/`
+      - name: Copy agents to main repo
+        run: |
+          mkdir -p agents/${{ github.event.inputs.username1 }}
+          mkdir -p agents/${{ github.event.inputs.username2 }}
+
+          cp fork1/user/my_agent.py agents/${{ github.event.inputs.username1 }}/my_agent.py
+          cp fork2/user/my_agent.py agents/${{ github.event.inputs.username2 }}/my_agent.py
+
+          echo "Agents copied successfully:"
+          ls -R agents
+
+      # Step 6: Run battle using environment variables, including ELOs
+      - name: Run battle
+        env:
+          AGENT1_PATH: agents/${{ github.event.inputs.username1 }}/my_agent.py
+          AGENT2_PATH: agents/${{ github.event.inputs.username2 }}/my_agent.py
+        run: |
+          echo "Running battle between:"
+          echo "Agent 1: $AGENT1_PATH"
+          echo "Agent 2: $AGENT2_PATH"
+          python3 -m pytest -s user/battle.py 

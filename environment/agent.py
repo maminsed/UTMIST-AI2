@@ -638,6 +638,15 @@ def run_match(agent_1: Agent | partial,
 
     # Initialize agents
     if not agent_1.initialized: agent_1.get_env_info(env)
+
+    rl_model_path = "rl-model.zip"
+    if os.path.exists(rl_model_path):
+        try:
+            os.remove(rl_model_path)
+            print(f"Removed {rl_model_path}")
+        except Exception as e:
+            print(f"Warning: Could not remove {rl_model_path}: {e}")
+
     if not agent_2.initialized: agent_2.get_env_info(env)
     # 596, 336
     platform1 = env.objects["platform1"]
