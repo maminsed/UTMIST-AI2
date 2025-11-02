@@ -680,7 +680,7 @@ def whiff_punishment_reward(env: WarehouseBrawl) -> float:
     far = min(distance/6.0,1.5)
     attacking = hasattr(player.state, 'move_type') and player.state.move_type not in [MoveType.NONE,MoveType.RECOVERY] 
     whiff = getattr(opponent, 'damage_taken_this_frame', 0) < 0.1
-    if not attacking or not whiff or distance < 1.3:
+    if not attacking or not whiff or distance < 1.5:
         return 0.0
     not_closing = 1.0 if not closing else 0.4
     return clip_reward(-0.03 * env.dt * far * not_closing,-1,1)
@@ -773,6 +773,24 @@ def no_input_penalty(env: WarehouseBrawl) -> float:
     if player.state == InAirState or dist >= 0.0003:
         return 0
     return -0.1 * env.dt
+
+def facing_opponent_reward(env: WarehouseBrawl) -> float:
+    """
+    Reward for facing towards the opponent.
+    """
+    player = env.objects['player']
+    opponent = env.objects['opponent']
+    
+    # Calculate direction to opponent
+    dx = opponent.body.position.x - player.body.position.x
+    # Player facing: 1.0 = RIGHT, 0.0 = LEFT
+    # Reward if facing the opponent (dx and facing match signs)
+    facing = 1.0 if player.facing == Facing.RIGHT else 0.0
+    is_facing_correct = (dx > 0 and facing == 1.0) or (dx < 0 and facing == 0.0)
+    
+    if not is_facing_correct:
+        return -0.02 * env.dt
+    return 0.0
 
 state_mapping = [
     'WalkingState',
@@ -1178,7 +1196,8 @@ def gen_reward_manager(numCheckpoint:int):
             'on_knockout_reward': 7.5,
             'on_combo_reward': 2.0,
             'on_equip_reward': 1.0,
-            'on_drop_reward': 0.8,
+            'on_drop_reward': 1.0,
+            'facing_opponent_reward': 2.0,
         }
     }
 
@@ -1200,6 +1219,7 @@ def gen_reward_manager(numCheckpoint:int):
         'jumping_on_middle': RewTerm(func=jumping_on_middle, weight=currCheckPoint['jumping_on_middle']), # checkpoint-driven weights
         'no_input_penalty': RewTerm(func=no_input_penalty, weight=currCheckPoint.get('no_input_penalty',0.0)),
         'bad_taunt': RewTerm(func=bad_taunt, weight=currCheckPoint.get('bad_taunt',0.0)),
+        'facing_opponent_reward': RewTerm(func=facing_opponent_reward, weight=currCheckPoint.get('facing_opponent_reward', 0.0)),
         # Keep these disabled/zero
         # 'stage_control': RewTerm(func=stage_control, weight=currCheckPoint.get('stage_control', 0.0))
         # 'time_pressure_reward': RewTerm(func=time_pressure_reward, weight=currCheckPoint.get('time_pressure_reward', 0.0)),
