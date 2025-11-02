@@ -65,7 +65,26 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          PYTHONPATH=$(pwd) python user/validate.py
+          set -e
+          python -V
+          pip -V
+          echo "PWD=$(pwd)"
+          echo "Listing validate target:"
+          ls -la user/validate.py || true
+          echo "Isolating PYTHONPATH to submission only"
+          export PYTHONPATH="$(pwd)"
+          python - <<'PY'
+          import importlib.util, sys
+          spec = importlib.util.find_spec('user.validate')
+          print('user.validate spec:', spec)
+          try:
+              import user.validate as v
+              print('user.validate file:', getattr(v, '__file__', None))
+          except Exception as e:
+              print('Pre-import failed:', e)
+          print('sys.path:', sys.path)
+          PY
+          pytest -s user/validate.py
 
       # === Step 4: Upload results as an artifact ===
       - name: Upload Results
@@ -120,7 +139,22 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/submission
           USERNAME: ${{ github.event.inputs.username }}
         run: |
-          PYTHONPATH=$(pwd) python user/validate.py
+          set -e
+          echo "PWD=$(pwd)"
+          ls -la user/validate.py || true
+          export PYTHONPATH="$(pwd)"
+          python - <<'PY'
+          import importlib.util, sys
+          spec = importlib.util.find_spec('user.validate')
+          print('user.validate spec:', spec)
+          try:
+              import user.validate as v
+              print('user.validate file:', getattr(v, '__file__', None))
+          except Exception as e:
+              print('Pre-import failed:', e)
+          print('sys.path:', sys.path)
+          PY
+          pytest -s user/validate.py
 
       # === Step 4: Upload results as an artifact ===
       - name: Upload Results
