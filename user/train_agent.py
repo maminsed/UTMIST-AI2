@@ -582,16 +582,27 @@ def head_to_opponent(
     env: WarehouseBrawl,
 ) -> float:
     player = env.objects['player']
+    platform = env.objects['platform1']
     opponent = env.objects['opponent']
     opp_curr_x = opponent.body.position.x
+    opp_curr_y = opponent.body.position.y
+    curr_x = player.body.position.x
 
     curr = (player.body.position.x - opponent.body.position.x) ** 2 + (player.body.position.y - opponent.body.position.y) ** 2
     prev = (player.prev_x - opponent.prev_x) ** 2 + (player.prev_y - opponent.prev_y) ** 2
+    edge_x = 1  # Platform half-width (from environment code)
+    # Get platform position directly from environment object
+    platform_x = platform.body.position.x
 
-    if curr < 2.0:
+    if curr < 1.0:
         return 0.3 * env.dt
-    if opp_curr_x < -6.9 or opp_curr_x > 6.9: #don't follow if outside
+    if opp_curr_x < -6.9 or opp_curr_x > 6.9 or opp_curr_y > 3: #don't follow if outside
         return 0.0
+    if platform_x - edge_x < curr_x < platform_x + edge_x:
+        return 0.0
+    
+    
+
     combined = np.tanh(prev - curr)
     return env.dt * combined
 
@@ -668,10 +679,9 @@ def whiff_punishment_reward(env: WarehouseBrawl) -> float:
     
     far = min(distance/6.0,1.5)
     attacking = hasattr(player.state, 'move_type') and player.state.move_type not in [MoveType.NONE,MoveType.RECOVERY] 
-    whiff = getattr(opponent, 'damage_taken_this_frame', 0) == 0
-    if not attacking or not whiff:
+    whiff = getattr(opponent, 'damage_taken_this_frame', 0) < 0.1
+    if not attacking or not whiff or distance < 1.3:
         return 0.0
-    
     not_closing = 1.0 if not closing else 0.4
     return clip_reward(-0.03 * env.dt * far * not_closing,-1,1)
 
@@ -1157,11 +1167,11 @@ def gen_reward_manager(numCheckpoint:int):
         #advance moves: 1m
         3: {
             'damage_interaction_reward': 3.0,
-            'advantage_state_reward': 0.0,
-            'whiff_punishment_reward': 2.6,
+            'advantage_state_reward': 0.1,
+            'whiff_punishment_reward': 3.0,
             'weapon_stability_reward': 0.01,
             'head_to_opponent': 0.8,
-            'jumping_on_middle': 0.4,
+            'jumping_on_middle': 0.0,
             'bad_taunt': 0.0,
             'no_input_penalty': 0.3,
             'on_win_reward': 8.5,
@@ -1281,9 +1291,8 @@ if __name__ == '__main__':
     }   
 
     opponent_spec3 = {
-        'self_play': (10, selfplay_handler),
-        'easy_hard_coded_bot': (2, partial(EasyHardCodedBot)),
-        'hard_hard_coded_bot': (8,partial(HardHardCodedBot))
+        'self_play': (18, selfplay_handler),
+        'hard_hard_coded_bot': (2,partial(HardHardCodedBot))
     }
     
     
