@@ -588,8 +588,8 @@ def head_to_opponent(
     opp_curr_y = opponent.body.position.y
     curr_x = player.body.position.x
 
-    curr = (player.body.position.x - opponent.body.position.x) ** 2 + (player.body.position.y - opponent.body.position.y) ** 2
-    prev = (player.prev_x - opponent.prev_x) ** 2 + (player.prev_y - opponent.prev_y) ** 2
+    curr = (player.body.position.x - opponent.body.position.x) ** 2
+    prev = (player.prev_x - opponent.prev_x) ** 2
     edge_x = 1  # Platform half-width (from environment code)
     # Get platform position directly from environment object
     platform_x = platform.body.position.x
@@ -1166,19 +1166,19 @@ def gen_reward_manager(numCheckpoint:int):
         }, 
         #advance moves: 1m
         3: {
-            'damage_interaction_reward': 3.0,
+            'damage_interaction_reward': 4.0,
             'advantage_state_reward': 0.1,
-            'whiff_punishment_reward': 3.0,
+            'whiff_punishment_reward': 2.5,
             'weapon_stability_reward': 0.01,
-            'head_to_opponent': 0.8,
-            'jumping_on_middle': 0.0,
+            'head_to_opponent': 3.6,
+            'jumping_on_middle': 0.5,
             'bad_taunt': 0.0,
-            'no_input_penalty': 0.3,
+            'no_input_penalty': 1.0,
             'on_win_reward': 8.5,
             'on_knockout_reward': 7.5,
             'on_combo_reward': 2.0,
             'on_equip_reward': 1.0,
-            'on_drop_reward': 0.8,
+            'on_drop_reward': 1.0,
         }
     }
 
