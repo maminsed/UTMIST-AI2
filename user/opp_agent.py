@@ -109,22 +109,23 @@ class SubmittedAgent(Agent):
                 {"keys": ["s", "j"], "cover": [7], "type": "aerial", "range": "far"}, 
                 {"keys": ["d","j"], "cover": [5], "type": "aerial", "range": "far"}, 
                 {"keys": ["k"], "cover": [2], "type": "aerial", "range": "close"},
-                {"keys": ["d", "k"], "cover": [7], "type": "aerial", "range": "lunge"},
+                {"keys": ["s", "k"], "cover": [7], "type": "aerial", "range": "lunge"},
 
                                       # big aerial smash
             ],
             # SPEAR
             1: [
-                {"keys": ["j"], "cover": [5], "type": "ground", "range": "close"},          # short swing, quick poke
+                {"keys": ["j"], "cover": [5], "type": "ground", "range": "lunge"},          # short swing, quick poke
                 {"keys": ["k"], "cover": [1, 2, 3], "type": "ground", "range": "lunge"},    # big lunge, heavy hit
-                {"keys": ["d", "j"], "cover": [5, 3], "type": "ground", "range": "far"},     # step-in swipe (right)
+                {"keys": ["d", "j"], "cover": [5, 3], "type": "ground", "range": "close"},
+                {"keys": ["d", "j"], "cover": [5, 3], "type": "ground", "range": "far"},      # step-in swipe (right)
                 {"keys": ["s", "j"], "cover": [8], "type": "ground", "range": "lunge"},     # low sweep
-                {"keys": ["s", "k"], "cover": [3, 5], "type": "ground", "range": "close"},     # downward spike
+                {"keys": ["s", "k"], "cover": [3, 5], "type": "ground", "range": "close", "super_safe": True},     # downward spike
                 {"keys": ["j"], "cover": [1, 2, 3, 4, 5, 6, 7, 8], "type": "aerial", "range": "close"},          # quick mid-air swing
                 {"keys": ["d", "j"], "cover": [5], "type": "aerial", "range": "far"},          # quick mid-air swing
                 {"keys": ["s", "j"], "cover": [7], "type": "aerial", "range": "far"},          # quick mid-air swing
                 {"keys": ["k"], "cover": [1, 2, 3], "type": "aerial", "range": "lunge"},           # big aerial smash
-                {"keys": ["d" ,"k"], "cover": [6, 7, 8], "type": "aerial", "range": "lunge"},
+                {"keys": ["s" ,"k"], "cover": [6, 7, 8], "type": "aerial", "range": "lunge"},
             ]
         }
 
@@ -240,6 +241,12 @@ class SubmittedAgent(Agent):
                 curr_platform = platform
                 self.last_platform = curr_platform
 
+        super_safe = False
+        for platform in all_platforms:
+            if pos[0] > platform[0] + 1.5 and pos[0] < platform[1] - 1.5 and pos[1] < platform[2] + 0.2:
+                super_safe = True
+
+
         opp_platform = None
         for platform in all_platforms:
             if opp_pos[0] > platform[0] and opp_pos[0] < platform[1] and opp_pos[1] < platform[2] + 0.2:
@@ -352,7 +359,7 @@ class SubmittedAgent(Agent):
                 attack_type = "out_of_range"
 
             if attack_type != "out_of_range":
-
+                
                 # Flip mapping for facing left
                 sector_flip = {1: 3, 3: 1, 4: 5, 5: 4, 6: 8, 8: 6, 2: 2, 7: 7, 0: 0}
                 eff_sector = sector_flip[sector] if facing == "left" else sector
@@ -365,6 +372,8 @@ class SubmittedAgent(Agent):
                     if move["range"] != attack_type:
                         continue
                     if eff_sector not in move["cover"]:
+                        continue
+                    if move.get("super_safe") and not super_safe:
                         continue
                     valid_moves.append(move)
 
@@ -416,10 +425,10 @@ class SubmittedAgent(Agent):
             if not safe:
                 self.lastJumped = self.time
                 keys.append('space')
-                if readible_obs["jumps_left"] == 0 and not readible_obs["grounded"]:
+                if readible_obs["jumps_left"] == 0 and readible_obs["aerial"]:
                     keys.append('w')
                     keys.append('k')
-            elif random.randint(0, 100) > 98:
+            elif random.randint(0, 100) > 95:
                 self.lastJumped = self.time
                 keys.append('space')
         
